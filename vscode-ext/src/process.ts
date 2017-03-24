@@ -1,8 +1,9 @@
 'use strict';
 
-import { execFile } from 'child_process';
+import { execFile, ChildProcess, spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
+import { ReadLine } from 'readline';
 
 interface CmdOutput {
     stdout: string;
@@ -52,4 +53,41 @@ export function exec(bin: string, args: string[], stdin?: string): Thenable<CmdO
             proc.stdin.end(stdin);
         }
     });
+}
+
+export class ReadlineProcess {
+    private rl: ReadLine;
+    private closed: boolean;
+    private promises = [];
+    private resolvers = [];
+
+    constructor(rl: ReadLine) {
+        this.rl = rl;
+        this.rl.on('line', line => {
+            let res = this.resolvers.pop();
+            res(line);
+        });
+        this.rl.on('close', () => {
+            this.closed = true;
+            this.promises = null;
+            this.resolvers = null;
+        });
+    }
+
+    write(line: string) {
+        this.rl.write(line + '\n');
+        let res;
+        this.promises.push(new Promise((resolve, reject) => {
+                res = resolve;
+        }));
+        this.resolvers.push(res);
+    }
+
+    next(): Thenable<string> {
+        if (this.closed || this.promises.length === 0) {
+            return undefined;
+        }
+
+        return this.promises.pop();
+    }
 }
