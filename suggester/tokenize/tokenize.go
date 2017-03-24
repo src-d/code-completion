@@ -9,10 +9,10 @@ import (
 	"strings"
 )
 
-func TokenizeScope(content []byte, pos int) (TokenList, error) {
+func TokenizeScope(content []byte, pos int) TokenList {
 	f, err := parser.ParseFile(token.NewFileSet(), "file.go", content, 0)
 	if err != nil {
-		return nil, err
+		return TokenizeRange(content, 0, pos)
 	}
 
 	tokens := tokenizeCurrentBlock(content, f, pos)
@@ -20,7 +20,7 @@ func TokenizeScope(content []byte, pos int) (TokenList, error) {
 		tokens = TokenizeRange(content, 0, pos)
 	}
 
-	return tokens, nil
+	return tokens
 }
 
 func tokenizeCurrentBlock(content []byte, f *ast.File, pos int) TokenList {

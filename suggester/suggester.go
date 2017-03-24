@@ -20,12 +20,7 @@ func main() {
 		return
 	}
 
-	tokens, err := tokenize.TokenizeScope(content, *pos)
-	if err != nil {
-		writeErrorResponse(err)
-		return
-	}
-
+	tokens := tokenize.TokenizeScope(content, *pos)
 	suggestionsForTokens(tokens)
 }
 
@@ -41,5 +36,5 @@ func suggestionsForTokens(tokens tokenize.TokenList) {
 	// TODO: mocked for now, when the suggestion neural network is ready
 	// this should be changed
 
-	writeOkResponse("if", "for")
+	writeOkResponse("if", "for", "ID_S")
 }
