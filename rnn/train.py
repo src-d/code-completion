@@ -44,7 +44,7 @@ def main():
             for lineno, line in enumerate(fin):
                 if lineno % 1000 == 0:
                     print("line #%d" % lineno)
-                if lineno > maxlines:
+                if lineno > maxlines > 0:
                     break
                 ctx = eval(line)
                 for i in range(start_offset, len(ctx)):
