@@ -8,32 +8,52 @@ import GoCompletionProvider from './autocompletion';
 import { LineExchangeProcess, binPath } from './process';
 
 const GO_CODE: DocumentFilter = { language: 'go', scheme: 'file' };
-const TRIGGER_CHARS: string[] = ['.', ' ', '\n', '(', ')', '\t', ',', '[', ']', '{', '}'];
-let proc: ChildProcess;
+const TRIGGER_CHARS: string[] = ['.', ' ', '\n', '(', ')', '\t', ',', '[', ']'];
+let relevanceProc: ChildProcess;
+let rnnProc: ChildProcess;
 const python = binPath('python3') || binPath('python');
 
 export function activate(context: ExtensionContext) {
     console.log('Extension has been activated');
-    const 
-    proc = spawn(python, [`${context.extensionPath}/../relevance/relevance.py`]);
-    proc.stderr.on('data', (data) => {
+    relevanceProc = spawn(python, [`${context.extensionPath}/../relevance/relevance.py`]);
+    relevanceProc.stderr.on('data', (data) => {
         console.error(data.toString());
     });
 
-    proc.on('close', (code, signal) => {
+    relevanceProc.on('close', (code, signal) => {
         console.error('relevance process died', code, signal);
+    });
+
+    rnnProc = spawn(python, [
+        `${context.extensionPath}/../rnn/infer.py`, 
+        '--model', 
+        `${context.extensionPath}/../rnn/docker_5000_0.82.hdf`,
+    ]);
+    rnnProc.stderr.on('data', (data) => {
+        console.error(data.toString());
+    });
+
+    rnnProc.on('close', (code, signal) => {
+        console.error('rnn process died', code, signal);
     });
  
     context.subscriptions.push(languages.registerCompletionItemProvider(
         GO_CODE,
-        new GoCompletionProvider(new LineExchangeProcess(proc)),
+        new GoCompletionProvider(
+            new LineExchangeProcess(relevanceProc),
+            new LineExchangeProcess(rnnProc),
+        ),
         ...TRIGGER_CHARS,
     ));
 }
 
 export function deactivate() {
     console.log('Extension has been deactivated');
-    if (proc) {
-        proc.kill();
+    if (relevanceProc) {
+        relevanceProc.kill();
+    }
+
+    if (rnnProc) {
+        rnnProc.kill();
     }
 }

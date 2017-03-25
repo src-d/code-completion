@@ -13,9 +13,11 @@ const methodRegex = /([a-zA-Z][a-zA-Z0-9]*)\.$/;
 export default class GoCompletionProvider implements CompletionItemProvider {
 	private configured: boolean;
 	private relevanceSorter: LineExchangeProcess;
+	private suggester: LineExchangeProcess;
 
-	constructor(relevanceSorter: LineExchangeProcess) {
+	constructor(relevanceSorter: LineExchangeProcess, suggester: LineExchangeProcess) {
 		this.relevanceSorter = relevanceSorter;
+		this.suggester = suggester;
 	}
 
 	provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken): Thenable<CompletionItem[]> {
@@ -37,10 +39,11 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 			return Promise.all([
 				autocompleteSymbol(pos, text)
 					.then(items => this.sortedCompletions(line, position.character, items)),
-				suggestNextTokens(pos, text),
+				this.tokenize(pos, text)
+					.then(tokens => this.suggestNextTokens(tokens)),
 			]).then(([completions, suggestions]) => {
 				return processSuggestions(
-					document.uri,
+					document,
 					position,
 					completions,
 					suggestions,
@@ -98,6 +101,35 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 
 		return Promise.resolve(items);
 	}
+
+	tokenize(position: number, text: string): Thenable<string> {
+		const tokenizer = binPath('tokenizer');
+		return new Promise<string>((resolve, reject) => {
+			exec(tokenizer, [`-pos=${position}`], text)
+				.then(out => {
+					if (out.stdout.startsWith('!ERR')) {
+						reject(out.stdout.substr(out.stdout.indexOf(':')));
+					} else {
+						resolve(out.stdout);
+					}
+				});
+		});
+	}
+
+	suggestNextTokens(tokens: string): Thenable<string[]> {
+		return this.suggester.write(tokens.trim())
+			.then(line => {
+				return line
+					.trim()
+					.split(',')
+					.map(s => {
+						if (s.startsWith("'")) {
+							return s.substring(1, s.length - 1);
+						}
+						return s;
+					});
+			});
+	}
 }
 
 function autocompleteSymbol(position: number, text: string): Thenable<CompletionItem[]> {
@@ -119,20 +151,6 @@ function isAlpha(code: number): boolean {
 	return (code > 47 && code < 58) ||
 		(code > 64 && code < 91) ||
 		(code > 96 && code < 123);
-}
-
-function suggestNextTokens(position: number, text: string): Thenable<string[]> {
-	const suggester = binPath('suggester');
-	return new Promise<string[]>((resolve, reject) => {
-		exec(suggester, [`-pos=${position}`], text)
-			.then(out => {
-				if (out.stdout.startsWith('!ERR')) {
-					reject(out.stdout.substr(out.stdout.indexOf(':')));
-				} else {
-					resolve(out.stdout.split(','));
-				}
-			});
-	});
 }
 
 interface GocodeSuggestion {
@@ -158,7 +176,7 @@ function classToKind(cls: string): CompletionItemKind {
 	}
 }
 
-function processSuggestions(uri: Uri, position: Position, completions: CompletionItem[], suggestions: string[]): CompletionItem[] {
+function processSuggestions(document: TextDocument, pos: Position, completions: CompletionItem[], suggestions: string[]): CompletionItem[] {
 	if (suggestions.length === 0) {
 		return completions;
 	}
@@ -174,15 +192,22 @@ function processSuggestions(uri: Uri, position: Position, completions: Completio
 			result.push(...completions.map((c, j) => withSortKey(c, i, j)));
 			completionsAdded = true;
 		} else {
+			const prefix = requiresNewLine(s, document.lineAt(pos.line).isEmptyOrWhitespace) ? '\n' : '';
 			result.push(withSortKey({
 				label: s,
-				insertText: s,
+				insertText: prefix + s,
 				kind: CompletionItemKind.Keyword,
 			}, i));
 		}
 	});
 
 	return result;
+}
+
+const newLineKeywords = ['if', 'for', 'select', 'switch'];
+
+function requiresNewLine(suggestion: string, isEmpty: boolean): boolean {
+	return newLineKeywords.indexOf(suggestion) >= 0 && !isEmpty;
 }
 
 function withSortKey(item: CompletionItem, i: number, j: number = 0): CompletionItem {

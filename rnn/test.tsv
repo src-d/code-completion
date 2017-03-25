@@ -1,2 +1,3 @@
 ["func", ID_S, "(", ID_S, "*", ID_S, ".", ID_S, ")", ID_S, "{", ID_S, ":=", ID_S]
 ["func", ID_S, "(", ID_S, ID_S, ".", ID_S, ")", ID_S, "{", "if", ID_S, "==", "nil", "{", "return"]
+["package", ID_S, ";", "import", ID_LIT_STR, ";", "import", ID_LIT_STR, ";", "func", ID_S, "(", ")", "{", "}", ";", "func", ID_S, "(", ")", "{", "}", ";", "func", ID_S, "(", ")", "{", "}", ";", "func", ID_S, "(", ")", "{", "}", ";"]

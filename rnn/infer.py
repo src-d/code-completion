@@ -32,6 +32,7 @@ def main():
                 x[0, i] = token_map[ctx[k]]
         pred = prediction2token(model.predict(x, verbose=0)[0])
         sys.stdout.write("%r\n" % pred)
+        sys.stdout.flush()
     backend.clear_session()
 
 if __name__ == "__main__":
