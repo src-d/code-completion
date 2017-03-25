@@ -16,7 +16,7 @@ def parse_args():
 def main():
     args = parse_args()
     model = models.load_model(args.model)
-    maxlen = model.inputs[0].shape[0]
+    maxlen = model.inputs[0].shape[1]
     x = numpy.zeros((maxlen, len(token_map)))
     for line in sys.stdin:
         ctx = eval(line)
