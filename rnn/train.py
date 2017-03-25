@@ -3,7 +3,7 @@ import os
 import pickle
 import sys
 
-from keras import models, layers
+from keras import models, layers, regularizers, optimizers
 
 from tokens import *
 
@@ -16,8 +16,10 @@ def parse_args():
     parser.add_argument("--maxlen", type=int, default=100)
     parser.add_argument("--start-offset", type=int, default=4)
     parser.add_argument("--neurons", type=int, default=128)
+    parser.add_argument("--learning-rate", type=float, default=0.001)
     parser.add_argument("--type", default="LSTM")
     parser.add_argument("--dropout", type=float, default=0)
+    parser.add_argument("--regularization", type=float, default=0)
     parser.add_argument("--recurrent-dropout", type=float, default=0)
     parser.add_argument("--activation", default="sigmoid")
     parser.add_argument("--optimizer", default="rmsprop")
@@ -73,21 +75,26 @@ def main():
 
 def train(x, y, **kwargs):
     neurons = kwargs.get("neurons", 128)
+    learning_rate = kwargs.get("learning_rate", 0.001)
     dropout = kwargs.get("dropout", 0)
     recurrent_dropout = kwargs.get("recurrent_dropout", 0)
     activation = kwargs.get("activation", "sigmoid")
-    optimizer = kwargs.get("optimizer", "adam")
+    optimizer = kwargs.get("optimizer", "rmsprop")
+    regularization = kwargs.get("regularization", 0)
     batch_size = kwargs.get("batch_size", 128)
     epochs = kwargs.get("epochs", 50)
     layer_type = kwargs.get("type", "LSTM")
     model = models.Sequential()
     model.add(getattr(layers, layer_type)(
         neurons, dropout=dropout, recurrent_dropout=recurrent_dropout,
+        kernel_regularizer=regularizers.l2(regularization),
         input_shape=x[0].shape, return_sequences=True))
     model.add(getattr(layers, layer_type)(
         neurons // 2, dropout=dropout, recurrent_dropout=recurrent_dropout,
+        kernel_regularizer=regularizers.l2(regularization),
         input_shape=x[0].shape))
     model.add(layers.Dense(x[0].shape[-1], activation=activation))
+    optimizer = getattr(optimizers, optimizer)(lr=learning_rate, clipnorm=1.)
     model.compile(loss="categorical_crossentropy",
                   optimizer=optimizer, metrics=["accuracy"])
     model.fit(x, y, batch_size=batch_size, epochs=epochs)
