@@ -8,6 +8,7 @@ with open("/dev/null", "w") as devnull:
     sys.stderr = devnull
     from keras import models, backend
     sys.stderr = stderr
+    del stderr
 
 from tokens import *
 
@@ -32,7 +33,7 @@ def main():
             if k >= 0:
                 x[0, i] = token_map[ctx[k]]
         preds = prediction2token(model.predict(x, verbose=0)[0], args.number)
-        sys.stdout.write("%s\n" % " ".join(repr(p) for p in preds))
+        sys.stdout.write("%s\n" % " ".join("%r %.3f" % p for p in preds))
     backend.clear_session()
 
 if __name__ == "__main__":
