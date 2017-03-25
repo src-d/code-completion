@@ -20,9 +20,10 @@ def parse_args():
     parser.add_argument("--dropout", type=float, default=0)
     parser.add_argument("--recurrent-dropout", type=float, default=0)
     parser.add_argument("--activation", default="sigmoid")
-    parser.add_argument("--optimizer", default="adam")
+    parser.add_argument("--optimizer", default="rmsprop")
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--cache", type=bool, action="store_true")
     return parser.parse_args()
 
 
@@ -57,9 +58,13 @@ def main():
                     y.append(token_map[ctx[i]])
         x = numpy.array(x, dtype=numpy.float32)
         y = numpy.array(y, dtype=numpy.float32)
-        print("saving the cache...")
-        with open(args.input + ".pickle", "wb") as fout:
-            pickle.dump((x, y), fout, protocol=-1)
+        if args.cache:
+            print("saving the cache...")
+            try:
+                with open(args.input + ".pickle", "wb") as fout:
+                    pickle.dump((x, y), fout, protocol=-1)
+            except Exception as e:
+                print(type(e), e)
     print("x:", x.shape)
     print("y:", y.shape)
     model = train(x, y, **args.__dict__)
