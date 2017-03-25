@@ -182,15 +182,29 @@ function processSuggestions(document: TextDocument, pos: Position, completions: 
 	}
 
 	const result = [];
-	let completionsAdded = false;
+	let completionsAdded = [];
 	suggestions.forEach((s, i) => {
 		if (s === 'ID_S' && !completionsAdded) {
-			result.push(...completions.map((c, j) => withSortKey(c, i, j)));
-			completionsAdded = true;
-		} else if (s.startsWith('ID_LIT_') && !completionsAdded) {
-			// TODO: limit suggestions to variables of the same type
-			result.push(...completions.map((c, j) => withSortKey(c, i, j)));
-			completionsAdded = true;
+			result.push(...completions
+				.filter(c => completionsAdded.indexOf(c.label) < 0)
+				.map((c, j) => withSortKey(c, i, j)));
+			completionsAdded.push(completions.map(c => c.label));
+
+		} else if (s.startsWith('ID_LIT_')) {
+			if (s === 'ID_LIT_BOOL') {
+				result.push([
+					{ label: 'true', insertText: 'true', kind: CompletionItemKind.Keyword },
+					{ label: 'false', insertText: 'false', kind: CompletionItemKind.Keyword },
+				].map((c, j) => withSortKey(c, i, j)));
+			}
+
+			if (!completionsAdded) {
+				const toAdd = completions.filter(c => completionsAdded.indexOf(c.label) < 0)
+					.filter(isOfType(s.substring(s.lastIndexOf('_')+1).toLowerCase()))
+					.map((c, j) => withSortKey(c, i, s === 'ID_LIT_BOOL' ? j + 2 : j));
+				result.push(...toAdd);
+				completionsAdded.push(toAdd.map(c => c.label));
+			}
 		} else {
 			const prefix = requiresNewLine(s, document.lineAt(pos.line).isEmptyOrWhitespace) ? '\n' : '';
 			result.push(withSortKey({
@@ -240,4 +254,21 @@ function inQuoted(line: string, pos: number, quote: string): boolean {
 		}
 	}
 	return inStr;
+}
+
+const typeMapping: { [k: string]: string[] | string } = {
+	'int': ['uint8', 'byte', 'int8', 'int16', 'uint16', 'int32', 'uint32', 'int', 'uint', 'int64', 'uint64', 'uintptr'],
+	'imag': ['complex128', 'complex256'],
+	'string': 'string',
+	'char': 'rune',
+	'bool': 'bool',
+	'float': 'float32', 'float64',
+};
+
+function isOfType(typ: string): (CompletionItem) => boolean {
+	const t = typeMapping[typ];
+	if (Array.isArray(t)) {
+		return c => t.indexOf(c.detail) >= 0;
+	}
+	return (c) => c.detail === t;
 }

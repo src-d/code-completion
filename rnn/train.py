@@ -23,7 +23,7 @@ def parse_args():
     parser.add_argument("--optimizer", default="rmsprop")
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--epochs", type=int, default=50)
-    parser.add_argument("--cache", type=bool, action="store_true")
+    parser.add_argument("--cache", action="store_true")
     return parser.parse_args()
 
 
@@ -44,7 +44,7 @@ def main():
             for lineno, line in enumerate(fin):
                 if lineno % 1000 == 0:
                     print("line #%d" % lineno)
-                if lineno > maxlines:
+                if lineno > maxlines > 0:
                     break
                 ctx = eval(line)
                 for i in range(start_offset, len(ctx)):

@@ -15,6 +15,7 @@ from tokens import *
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
+    parser.add_argument("--number", type=int, default=1)
     return parser.parse_args()
 
 
@@ -30,8 +31,9 @@ def main():
             k = len(ctx) - maxlen + i
             if k >= 0:
                 x[0, i] = token_map[ctx[k]]
-        pred = prediction2token(model.predict(x, verbose=0)[0])
-        sys.stdout.write("%r\n" % pred)
+
+        preds = prediction2token(model.predict(x, verbose=0)[0], args.number)
+        sys.stdout.write("%s\n" % " ".join(repr(p) for p in preds))
         sys.stdout.flush()
     backend.clear_session()
 
