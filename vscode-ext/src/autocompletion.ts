@@ -5,34 +5,35 @@ import {
 	TextDocument, Position, CancellationToken,
 	CompletionItem, CompletionItemKind, Uri, Range,
 } from 'vscode';
-import { exec, binPath, ReadlineProcess } from './process';
+import { exec, binPath, LineExchangeProcess } from './process';
 
 const assignRegex = /([a-zA-Z][a-zA-Z0-9]*) *:?= *$/;
 const methodRegex = /([a-zA-Z][a-zA-Z0-9]*)\.$/;
 
 export default class GoCompletionProvider implements CompletionItemProvider {
 	private configured: boolean;
-	private relevanceSorter: ReadlineProcess;
+	private relevanceSorter: LineExchangeProcess;
 
-	constructor(relevanceSorter: ReadlineProcess) {
+	constructor(relevanceSorter: LineExchangeProcess) {
 		this.relevanceSorter = relevanceSorter;
 	}
 
 	provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken): Thenable<CompletionItem[]> {
-		console.log('completion requested');
 		const text = document.getText();
 		const pos = document.offsetAt(position);
+
+		// don't suggest tokens if the previous line has text but the current one is empty
+		if (!document.lineAt(position.line-1).isEmptyOrWhitespace 
+			&& document.lineAt(position.line).isEmptyOrWhitespace) {
+			return Promise.resolve([]);
+		}
+
 		const line = document.getText(document.lineAt(position.line).range);
 		if (inString(line, position.character)) {
 			return Promise.resolve([]);
 		}
 
-		// TODO: get the current word and decide if it should be sorted or not
-
-		document.lineAt(position.line).firstNonWhitespaceCharacterIndex;
-		const word = document.getText(document.getWordRangeAtPosition(position));
 		return this.ensureConfigured().then(() => {
-			console.log('was configured');
 			return Promise.all([
 				autocompleteSymbol(pos, text)
 					.then(items => this.sortedCompletions(line, position.character, items)),
@@ -68,16 +69,18 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	}
 
 	sortByRelevance(ident: string, items: CompletionItem[]): Thenable<CompletionItem[]> {
-		this.relevanceSorter.write([ident, ...items.map(c => c.label)].join(','));
-		return this.relevanceSorter.next().then(line => {
-			if (line) {
-				const sorted = line.split(',');
-				return items
-					.sort((a, b) => sorted.indexOf(a.label) - sorted.indexOf(b.label));
-			}
+		items = items.filter(c => c.label !== ident);
+		return this.relevanceSorter
+			.write([ident, ...items.map(c => c.label)].join(','))
+			.then(line => {
+				if (line) {
+					const sorted = line.split(',');
+					return items
+						.sort((a, b) => sorted.indexOf(a.label) - sorted.indexOf(b.label));
+				}
 
-			return items;
-		});
+				return items;
+			});
 	}
 
 	sortedCompletions(line: string, pos: number, items: CompletionItem[]): Thenable<CompletionItem[]> {
@@ -90,7 +93,6 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 		}
 
 		if (ident) {
-			console.log('sorting by relevance for', ident);
 			return this.sortByRelevance(ident, items);
 		}
 
@@ -99,11 +101,9 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 }
 
 function autocompleteSymbol(position: number, text: string): Thenable<CompletionItem[]> {
-	console.log('autocompleting symbols');
 	const gocode = binPath('gocode');
 	return exec(gocode, ['-f=json', 'autocomplete', 'c' + position], text)
 		.then(output => {
-			console.log('autocompleted symbols');
 			const suggestions = <[number, GocodeSuggestion[]]>JSON.parse(output.stdout);
 			return suggestions[1].map(s => {
 				return {
@@ -122,14 +122,11 @@ function isAlpha(code: number): boolean {
 }
 
 function suggestNextTokens(position: number, text: string): Thenable<string[]> {
-	console.log('suggesting next tokens');
 	const suggester = binPath('suggester');
 	return new Promise<string[]>((resolve, reject) => {
 		exec(suggester, [`-pos=${position}`], text)
 			.then(out => {
-				console.log('suggested next tokens');
 				if (out.stdout.startsWith('!ERR')) {
-					console.log(out.stdout);
 					reject(out.stdout.substr(out.stdout.indexOf(':')));
 				} else {
 					resolve(out.stdout.split(','));
@@ -162,8 +159,6 @@ function classToKind(cls: string): CompletionItemKind {
 }
 
 function processSuggestions(uri: Uri, position: Position, completions: CompletionItem[], suggestions: string[]): CompletionItem[] {
-	console.log('suggestions', suggestions);
-	console.log('completions', completions.map(c => c.label));
 	if (suggestions.length === 0) {
 		return completions;
 	}

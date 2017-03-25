@@ -4,9 +4,8 @@ import {
     DocumentFilter, languages, ExtensionContext,
 } from 'vscode';
 import { spawn, ChildProcess } from 'child_process';
-import { createInterface, ReadLineOptions, ReadLine } from 'readline';
 import GoCompletionProvider from './autocompletion';
-import { ReadlineProcess, binPath } from './process';
+import { LineExchangeProcess, binPath } from './process';
 
 const GO_CODE: DocumentFilter = { language: 'go', scheme: 'file' };
 const TRIGGER_CHARS: string[] = ['.', ' ', '\n', '(', ')', '\t', ',', '[', ']', '{', '}'];
@@ -18,17 +17,16 @@ export function activate(context: ExtensionContext) {
     const 
     proc = spawn(python, [`${context.extensionPath}/../relevance/relevance.py`]);
     proc.stderr.on('data', (data) => {
-        console.log(data.toString());
-        console.log(data);
+        console.error(data.toString());
     });
-    proc.on('close', (code, signal) => {
-        console.log('relevance process died');
-    });
-    const rl = createInterface({ input: proc.stdout });
 
+    proc.on('close', (code, signal) => {
+        console.error('relevance process died', code, signal);
+    });
+ 
     context.subscriptions.push(languages.registerCompletionItemProvider(
         GO_CODE,
-        new GoCompletionProvider(new ReadlineProcess(rl)),
+        new GoCompletionProvider(new LineExchangeProcess(proc)),
         ...TRIGGER_CHARS,
     ));
 }

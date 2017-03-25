@@ -3,7 +3,7 @@
 import { execFile, ChildProcess, spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
-import { ReadLine } from 'readline';
+import { ReadLine, createInterface } from 'readline';
 
 interface CmdOutput {
     stdout: string;
@@ -55,37 +55,54 @@ export function exec(bin: string, args: string[], stdin?: string): Thenable<CmdO
     });
 }
 
-export class ReadlineProcess {
+export class LineExchangeProcess {
     private rl: ReadLine;
+    private proc: ChildProcess;
     private closed: boolean;
     private promises = [];
     private resolvers = [];
 
-    constructor(rl: ReadLine) {
-        this.rl = rl;
+    constructor(proc: ChildProcess) {
+        this.rl = createInterface({ input: proc.stdout });
+        this.proc = proc;
+
         this.rl.on('line', line => {
             let res = this.resolvers.pop();
-            res(line);
+            if (res) {
+                res(line);
+            } else {
+                console.error('no resolver for line', line);
+            }
         });
-        this.rl.on('close', () => {
+
+        const close = () => {
+            console.error('closed proc');
             this.closed = true;
             this.promises = null;
             this.resolvers = null;
+        };
+
+        this.rl.on('close', close);
+        this.proc.on('close', close);
+    }
+
+    write(line: string): Thenable<string | undefined> {
+        return new Promise((resolve, reject) => {
+            this.proc.stdin.write(line + '\n', () => {
+                let res;
+                this.promises.push(new Promise((resolve, reject) => {
+                        res = resolve;
+                }));
+                this.resolvers.push(res);
+                resolve(this.next());
+            });
         });
     }
 
-    write(line: string) {
-        this.rl.write(line + '\n');
-        let res;
-        this.promises.push(new Promise((resolve, reject) => {
-                res = resolve;
-        }));
-        this.resolvers.push(res);
-    }
-
-    next(): Thenable<string> {
+    next(): Thenable<string | undefined> {
         if (this.closed || this.promises.length === 0) {
-            return undefined;
+            console.warn('unable to retrieve next');
+            return Promise.resolve(undefined);
         }
 
         return this.promises.pop();
