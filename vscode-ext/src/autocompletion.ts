@@ -121,13 +121,7 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 			.then(line => {
 				return line
 					.trim()
-					.split(',')
-					.map(s => {
-						if (s.startsWith("'")) {
-							return s.substring(1, s.length - 1);
-						}
-						return s;
-					});
+					.split(' ');
 			});
 	}
 }
@@ -183,13 +177,18 @@ function processSuggestions(document: TextDocument, pos: Position, completions: 
 
 	const result = [];
 	let completionsAdded = [];
-	suggestions.forEach((s, i) => {
-		if (s === 'ID_S' && !completionsAdded) {
+	suggestions.forEach((suggestion, i) => {
+		let [s, confidence] = suggestion.split('@');
+		s = s.startsWith("'") ? s.substring(1, s.length - 1) : s;
+		if (Number(confidence) < 0.3) {
+			return;
+		}
+
+		if (s === 'ID_S' && completionsAdded.length != completions.length) {
 			result.push(...completions
 				.filter(c => completionsAdded.indexOf(c.label) < 0)
 				.map((c, j) => withSortKey(c, i, j)));
 			completionsAdded.push(completions.map(c => c.label));
-
 		} else if (s.startsWith('ID_LIT_')) {
 			if (s === 'ID_LIT_BOOL') {
 				result.push([
@@ -198,14 +197,14 @@ function processSuggestions(document: TextDocument, pos: Position, completions: 
 				].map((c, j) => withSortKey(c, i, j)));
 			}
 
-			if (!completionsAdded) {
+			if (completionsAdded.length !== completions.length) {
 				const toAdd = completions.filter(c => completionsAdded.indexOf(c.label) < 0)
 					.filter(isOfType(s.substring(s.lastIndexOf('_')+1).toLowerCase()))
 					.map((c, j) => withSortKey(c, i, s === 'ID_LIT_BOOL' ? j + 2 : j));
 				result.push(...toAdd);
 				completionsAdded.push(toAdd.map(c => c.label));
 			}
-		} else {
+		} else if (!s.startsWith('ID_')) {
 			const prefix = requiresNewLine(s, document.lineAt(pos.line).isEmptyOrWhitespace) ? '\n' : '';
 			result.push(withSortKey({
 				label: s,
@@ -218,7 +217,7 @@ function processSuggestions(document: TextDocument, pos: Position, completions: 
 	return result;
 }
 
-const newLineKeywords = ['if', 'for', 'select', 'switch'];
+const newLineKeywords = ['if', 'for', 'select', 'switch', 'defer', 'go'];
 
 function requiresNewLine(suggestion: string, isEmpty: boolean): boolean {
 	return newLineKeywords.indexOf(suggestion) >= 0 && !isEmpty;
@@ -262,7 +261,7 @@ const typeMapping: { [k: string]: string[] | string } = {
 	'string': 'string',
 	'char': 'rune',
 	'bool': 'bool',
-	'float': 'float32', 'float64',
+	'float': ['float32', 'float64'],
 };
 
 function isOfType(typ: string): (CompletionItem) => boolean {

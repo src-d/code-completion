@@ -45,4 +45,4 @@ token_map = {t: _index2array(i) for i, t in enumerate(_tokens)}
 
 def prediction2token(preds, number):
     indices = numpy.argsort(preds)[::-1][:number]
-    return [_tokens[i] for i in indices]
+    return [(_tokens[i], preds[i] / preds[indices[0]]) for i in indices]

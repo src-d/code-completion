@@ -28,6 +28,8 @@ export function activate(context: ExtensionContext) {
         `${context.extensionPath}/../rnn/infer.py`, 
         '--model', 
         `${context.extensionPath}/../rnn/docker_5000_0.82.hdf`,
+        '--number',
+        '10',
     ]);
     rnnProc.stderr.on('data', (data) => {
         console.error(data.toString());
