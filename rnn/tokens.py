@@ -43,10 +43,5 @@ def _index2array(i):
 token_map = {t: _index2array(i) for i, t in enumerate(_tokens)}
 
 
-def prediction2token(pred, diversity=1):
-    preds = numpy.asarray(pred)
-    preds = numpy.log(preds) / diversity
-    exp_preds = numpy.exp(preds)
-    preds = exp_preds / numpy.sum(exp_preds)
-    probas = numpy.random.multinomial(1, preds, 1)
-    return _tokens[numpy.argmax(probas)]
+def prediction2token(pred):
+    return _tokens[numpy.argmax(pred)]
