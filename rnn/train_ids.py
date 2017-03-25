@@ -113,8 +113,10 @@ def main():
                         word = True
                     elif word:
                         word = False
-                        words.append(tuple(
-                            vocabulary[p] for p in extract_names(c)))
+                        wadd = tuple(
+                            vocabulary[p] for p in extract_names(c))
+                        if wadd:
+                            words.append(wadd)
                 for i in range(start_offset, len(words)):
                     sample = numpy.zeros((maxlen, len(vocabulary)),
                                          dtype=numpy.float32)
