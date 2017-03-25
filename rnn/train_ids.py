@@ -5,9 +5,8 @@ import re
 import sys
 
 from keras import models, layers, regularizers, optimizers
-import numpy
 
-from tokens import ID_S
+from tokens import *
 
 
 NAME_BREAKUP_RE = re.compile(r"[^a-zA-Z]+")
@@ -97,6 +96,7 @@ def main():
                     if c == ID_S:
                         word = True
                     elif word:
+                        word = False
                         for part in extract_names(c):
                             vocabulary.setdefault(part, len(vocabulary))
         with open(args.input) as fin:
@@ -112,6 +112,7 @@ def main():
                     if c == ID_S:
                         word = True
                     elif word:
+                        word = False
                         words.append(tuple(
                             vocabulary[p] for p in extract_names(c)))
                 for i in range(start_offset, len(words)):
