@@ -53,18 +53,18 @@ func Tokenize(content string) TokenList {
 	s.Init(file, []byte(content), nil, 0)
 
 	var tokens TokenList
+	var lastTok token.Token
 	for {
 		_, tok, lit := s.Scan()
 		if tok == token.EOF {
+			if lastTok == token.SEMICOLON {
+				tokens = tokens[:len(tokens)-1]
+			}
 			break
 		}
 
-		if tok == token.SEMICOLON &&
-			strings.TrimSpace(lit) == "" {
-			continue
-		}
-
 		tokens = append(tokens, NewToken(tok, lit))
+		lastTok = tok
 	}
 
 	return tokens

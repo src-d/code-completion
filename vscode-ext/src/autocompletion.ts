@@ -3,7 +3,7 @@
 import {
 	CompletionItemProvider,
 	TextDocument, Position, CancellationToken,
-	CompletionItem, CompletionItemKind, Uri, Range,
+	CompletionItem, CompletionItemKind, Uri, Range, TextEdit,
 } from 'vscode';
 import { exec, binPath, LineExchangeProcess } from './process';
 
@@ -38,6 +38,7 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 		return this.ensureConfigured().then(() => {
 			return Promise.all([
 				autocompleteSymbol(pos, text)
+					.then(items => items.filter(c => c.label !== 'main'))
 					.then(items => this.sortedCompletions(line, position.character, items)),
 				this.tokenize(pos, text)
 					.then(tokens => this.suggestNextTokens(tokens)),
@@ -117,12 +118,16 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	}
 
 	suggestNextTokens(tokens: string): Thenable<string[]> {
-		console.log(tokens);
+		tokens = tokens.trim();
 		return this.suggester.write(tokens.trim())
 			.then(line => {
-				return line
-					.trim()
-					.split(' ');
+				const suggestions = line.trim().split(' ');
+				if (suggestions[0].startsWith("';'")) {
+					const nextTokens = tokens.substring(0, tokens.length - 1) + ', ";"]';
+					return this.suggestNextTokens(nextTokens);
+				}
+
+				return suggestions;
 			});
 	}
 }
@@ -205,6 +210,19 @@ function processSuggestions(document: TextDocument, pos: Position, completions: 
 				result.push(...toAdd);
 				completionsAdded.push(toAdd.map(c => c.label));
 			}
+		} else if (s === '{') {
+			const lineIndent = document.getText(new Range(
+				new Position(pos.line, 0),
+				new Position(pos.line, document.lineAt(pos.line).firstNonWhitespaceCharacterIndex) 
+			));
+			const nextLineRange = document.lineAt(pos.line + 1).range;
+			const nextLine = document.getText(nextLineRange);
+			result.push(withSortKey({
+				label: s,
+				kind: CompletionItemKind.Unit,
+				insertText: s + '\n\t',
+				additionalTextEdits: [TextEdit.replace(nextLineRange, `${lineIndent}}\n${nextLine}`)],
+			}, i));
 		} else if (!s.startsWith('ID_')) {
 			const prefix = requiresNewLine(s, document.lineAt(pos.line).isEmptyOrWhitespace) ? '\n' : '';
 			result.push(withSortKey({

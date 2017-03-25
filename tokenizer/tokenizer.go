@@ -13,9 +13,8 @@ func main() {
 	var pos = flag.Int("pos", 0, "position of the cursor in the file")
 	flag.Parse()
 
-	var err error
-	var content []byte
-	if content, err = ioutil.ReadAll(os.Stdin); err != nil {
+	content, err := ioutil.ReadAll(os.Stdin)
+	if err != nil {
 		writeErrorResponse(err)
 		return
 	}
