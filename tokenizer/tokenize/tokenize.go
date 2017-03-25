@@ -59,6 +59,11 @@ func Tokenize(content string) TokenList {
 			break
 		}
 
+		if tok == token.SEMICOLON &&
+			strings.TrimSpace(lit) == "" {
+			continue
+		}
+
 		tokens = append(tokens, NewToken(tok, lit))
 	}
 

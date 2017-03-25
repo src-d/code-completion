@@ -117,6 +117,7 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	}
 
 	suggestNextTokens(tokens: string): Thenable<string[]> {
+		console.log(tokens);
 		return this.suggester.write(tokens.trim())
 			.then(line => {
 				return line
