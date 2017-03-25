@@ -1,0 +1,2 @@
+["func", ID_S, "(", ID_S, "*", ID_S, ".", ID_S, ")", ID_S, "{", ID_S, ":=", ID_S]
+["func", ID_S, "(", ID_S, ID_S, ".", ID_S, ")", ID_S, "{", "if", ID_S, "==", "nil", "{", "return"]
