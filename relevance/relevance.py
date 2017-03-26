@@ -46,6 +46,7 @@ def main():
       # if there is any error print an empty line, the extension
       # will handle the lack of relevance sorting
       print('')
+      stdout.flush()
 
 
 if __name__ == '__main__':

@@ -26,16 +26,20 @@ def main():
     maxlen = model.inputs[0].shape[1].value
     x = numpy.zeros((1, maxlen, len(token_map)))
     for line in sys.stdin:
-        ctx = eval(line)
-        x[:] = 0
-        for i in range(maxlen):
-            k = len(ctx) - maxlen + i
-            if k >= 0:
-                x[0, i] = token_map[ctx[k]]
+        try:
+            ctx = eval(line)
+            x[:] = 0
+            for i in range(maxlen):
+                k = len(ctx) - maxlen + i
+                if k >= 0:
+                    x[0, i] = token_map[ctx[k]]
 
-        preds = prediction2token(model.predict(x, verbose=0)[0], args.number)
-        sys.stdout.write("%s\n" % " ".join("%r@%.3f" % p for p in preds))
-        sys.stdout.flush()
+            preds = prediction2token(model.predict(x, verbose=0)[0], args.number)
+            sys.stdout.write("%s\n" % " ".join("%r@%.3f" % p for p in preds))
+            sys.stdout.flush()
+        except:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
     backend.clear_session()
 
 if __name__ == "__main__":

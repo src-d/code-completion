@@ -33,27 +33,31 @@ def main():
     maxlen = model.inputs[0].shape[1].value
     x = numpy.zeros((1, maxlen, len(vocabulary)))
     for line in sys.stdin:
-        ctx = eval(line)
-        x[:] = 0
-        word = False
-        words = []
-        for c in ctx:
-            if c == ID_S:
-                word = True
-            elif word:
-                word = False
-                wadd = tuple(vocabulary[p] for p in extract_names(c))
-                if wadd:
-                    words.append(wadd)
-        for i, w in enumerate(words):
-            for c in w:
-                x[0, maxlen - len(words) + i, c] = 1
-        preds = model.predict(x, verbose=0)[0]
-        best = numpy.argsort(preds)[::-1][:args.number]
-        preds /= preds[best[0]]
-        sys.stdout.write(
-            "%s\n" % " ".join("%s@%.3f" % (ivoc[i], preds[i]) for i in best))
-        sys.stdout.flush()
+        try:
+          ctx = eval(line)
+          x[:] = 0
+          word = False
+          words = []
+          for c in ctx:
+              if c == ID_S:
+                  word = True
+              elif word:
+                  word = False
+                  wadd = tuple(vocabulary[p] for p in extract_names(c))
+                  if wadd:
+                      words.append(wadd)
+          for i, w in enumerate(words):
+              for c in w:
+                  x[0, maxlen - len(words) + i, c] = 1
+          preds = model.predict(x, verbose=0)[0]
+          best = numpy.argsort(preds)[::-1][:args.number]
+          preds /= preds[best[0]]
+          sys.stdout.write(
+            " ".join("%s@%.3f" % (ivoc[i], preds[i]) for i in best))
+          sys.stdout.flush()
+        except:
+          sys.stdout.write("\n")
+          sys.stdout.flush()
     backend.clear_session()
 
 if __name__ == "__main__":

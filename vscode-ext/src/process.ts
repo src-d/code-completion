@@ -88,7 +88,7 @@ export class LineExchangeProcess {
 
     write(line: string): Thenable<string | undefined> {
         return new Promise((resolve, reject) => {
-            this.proc.stdin.write(line + '\n', () => {
+            this.proc.stdin.write(line.trim() + '\n', () => {
                 let res;
                 this.promises.push(new Promise((resolve, reject) => {
                         res = resolve;

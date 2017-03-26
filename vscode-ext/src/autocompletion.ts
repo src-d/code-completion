@@ -40,7 +40,17 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 					describe(document, position, text),
 					autocompleteSymbol(pos, text)
 						.then(items => items.filter(c => c.label !== 'main')),
-				]).then(([symbols, items]) => this.sortedCompletions(line, position.character, items, symbols)),
+					this.tokenize(pos, text, true),
+				]).then(([symbols, items, tokens]) => this.guessIdentifiers(tokens, items)
+					.then(suggestedItems => {
+						if (!suggestedItems) {
+							return this.sortedCompletions(
+								line, position.character, items, symbols,
+							);
+						}
+
+						return suggestedItems;
+					})),
 				this.tokenize(pos, text)
 					.then(tokens => this.suggestNextTokens(tokens)),
 			]).then(([completions, suggestions]) => {
@@ -69,8 +79,7 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 			});
 		});
 
-		return Promise.all([config])
-			.then(_ => Promise.resolve());
+		return Promise.all([config]).then(_ => Promise.resolve());
 	}
 
 	sortByRelevance(ident: string, items: CompletionItem[]): Thenable<CompletionItem[]> {
@@ -100,10 +109,10 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 		);
 	}
 
-	tokenize(position: number, text: string): Thenable<string> {
+	tokenize(position: number, text: string, full: boolean = false): Thenable<string> {
 		const tokenizer = binPath('tokenizer');
 		return new Promise<string>((resolve, reject) => {
-			exec(tokenizer, [`-pos=${position}`], text)
+			exec(tokenizer, [`-pos=${position}`].concat(full ? ['-full=true'] : []), text)
 				.then(out => {
 					if (out.stdout.startsWith('!ERR')) {
 						reject(out.stdout.substr(out.stdout.indexOf(':')));
@@ -126,6 +135,26 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 
 				return suggestions;
 			});
+	}
+
+	guessIdentifiers(tokens: string, items: CompletionItem[]): Thenable<CompletionItem[] | undefined> {
+		return this.idGuesser.write(tokens).then(line => {
+			if (!line.trim()) return undefined;
+
+			line.trim()
+				.split(' ')
+				.forEach(p => {
+					const [ident, confidence] = p.split('@');
+					items.filter(it => it.label.toLowerCase().indexOf(ident) >= 0)
+						.forEach(m => {
+							m['confidence'] += confidence;
+						});
+				});
+
+			return items
+				.filter(it => (it['confidence'] || 0) > 0.4)
+				.sort((a, b) => (a['confidence'] || 0) - (a['confidence'] || 0));
+		});
 	}
 }
 
