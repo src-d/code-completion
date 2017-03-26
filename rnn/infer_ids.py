@@ -50,6 +50,7 @@ def main():
                 x[0, maxlen - len(words) + i, c] = 1
         preds = model.predict(x, verbose=0)[0]
         best = numpy.argsort(preds)[::-1][:args.number]
+        preds /= preds[best[0]]
         sys.stdout.write(
             "%s\n" % " ".join("%s@%.3f" % (ivoc[i], preds[i]) for i in best))
         sys.stdout.flush()
