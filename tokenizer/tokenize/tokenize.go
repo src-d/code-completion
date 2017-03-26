@@ -9,21 +9,21 @@ import (
 	"strings"
 )
 
-func TokenizeScope(content []byte, pos int) TokenList {
+func TokenizeScope(content []byte, pos int, full bool) TokenList {
 	f, err := parser.ParseFile(token.NewFileSet(), "file.go", content, 0)
 	if err != nil {
-		return TokenizeRange(content, 0, pos)
+		return TokenizeRange(content, 0, pos, full)
 	}
 
-	tokens := tokenizeCurrentBlock(content, f, pos)
+	tokens := tokenizeCurrentBlock(content, f, pos, full)
 	if len(tokens) == 0 {
-		tokens = TokenizeRange(content, 0, pos)
+		tokens = TokenizeRange(content, 0, pos, full)
 	}
 
 	return tokens
 }
 
-func tokenizeCurrentBlock(content []byte, f *ast.File, pos int) TokenList {
+func tokenizeCurrentBlock(content []byte, f *ast.File, pos int, full bool) TokenList {
 	for _, obj := range f.Scope.Objects {
 		node, ok := obj.Decl.(ast.Node)
 		if !ok {
@@ -31,22 +31,41 @@ func tokenizeCurrentBlock(content []byte, f *ast.File, pos int) TokenList {
 		}
 
 		if node.Pos() < token.Pos(pos) && node.End() > token.Pos(pos) {
-			return TokenizeRange(content, int(node.Pos()-1), pos)
+			return TokenizeRange(content, int(node.Pos()-1), pos, full)
 		}
 	}
 
 	return nil
 }
 
-func TokenizeRange(content []byte, start, end int) TokenList {
+func TokenizeRange(content []byte, start, end int, full bool) TokenList {
 	if len(content)-1 < end {
 		end = len(content) - 1
 	}
 
-	return Tokenize(string(content[start:end]))
+	return Tokenize(string(content[start:end]), full)
 }
 
-func Tokenize(content string) TokenList {
+func Identifiers(content []byte) []string {
+	var s scanner.Scanner
+	fset := token.NewFileSet()
+	file := fset.AddFile("", fset.Base(), len(content))
+	s.Init(file, []byte(content), nil, 0)
+
+	var tokens []string
+	for {
+		_, tok, lit := s.Scan()
+		if tok == token.EOF {
+			return tokens
+		}
+
+		if tok == token.IDENT {
+			tokens = append(tokens, lit)
+		}
+	}
+}
+
+func Tokenize(content string, full bool) TokenList {
 	var s scanner.Scanner
 	fset := token.NewFileSet()
 	file := fset.AddFile("", fset.Base(), len(content))
@@ -64,6 +83,13 @@ func Tokenize(content string) TokenList {
 		}
 
 		tokens = append(tokens, NewToken(tok, lit))
+		if full &&
+			tok == token.IDENT &&
+			lit != "false" &&
+			lit != "nil" &&
+			lit != "true" {
+			tokens = append(tokens, &fixToken{lit})
+		}
 		lastTok = tok
 	}
 
