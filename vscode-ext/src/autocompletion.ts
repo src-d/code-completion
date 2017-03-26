@@ -11,10 +11,12 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	private configured: boolean;
 	private relevanceSorter: LineExchangeProcess;
 	private suggester: LineExchangeProcess;
+	private idGuesser: LineExchangeProcess;
 
-	constructor(relevanceSorter: LineExchangeProcess, suggester: LineExchangeProcess) {
+	constructor(relevanceSorter: LineExchangeProcess, suggester: LineExchangeProcess, idGuesser: LineExchangeProcess) {
 		this.relevanceSorter = relevanceSorter;
 		this.suggester = suggester;
+		this.idGuesser = idGuesser;
 	}
 
 	provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken): Thenable<CompletionItem[]> {
