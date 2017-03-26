@@ -2,5 +2,5 @@ Usage
 =====
 
 ```
-cat test.csv | python3 infer.py --model /path/to/trained/model.hdf 
+cat test_toks.csv | python3 infer_toks.py --model /path/to/trained/model.hdf 
 ```

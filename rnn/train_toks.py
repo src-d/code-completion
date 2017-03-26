@@ -15,6 +15,7 @@ def parse_args():
     parser.add_argument("--maxlines", type=int, default=0)
     parser.add_argument("--maxlen", type=int, default=100)
     parser.add_argument("--start-offset", type=int, default=4)
+    parser.add_argument("--validation", type=float, default=0)
     parser.add_argument("--neurons", type=int, default=128)
     parser.add_argument("--learning-rate", type=float, default=0.001)
     parser.add_argument("--type", default="LSTM")
@@ -84,6 +85,7 @@ def train(x, y, **kwargs):
     batch_size = kwargs.get("batch_size", 128)
     epochs = kwargs.get("epochs", 50)
     layer_type = kwargs.get("type", "LSTM")
+    validation = kwargs.get("validation", 0)
     model = models.Sequential()
     model.add(getattr(layers, layer_type)(
         neurons, dropout=dropout, recurrent_dropout=recurrent_dropout,
@@ -95,9 +97,10 @@ def train(x, y, **kwargs):
         input_shape=x[0].shape))
     model.add(layers.Dense(x[0].shape[-1], activation=activation))
     optimizer = getattr(optimizers, optimizer)(lr=learning_rate, clipnorm=1.)
-    model.compile(loss="categorical_crossentropy",
-                  optimizer=optimizer, metrics=["accuracy"])
-    model.fit(x, y, batch_size=batch_size, epochs=epochs)
+    model.compile(loss="categorical_crossentropy", optimizer=optimizer,
+                  metrics=["accuracy", "top_k_categorical_accuracy"])
+    model.fit(x, y, batch_size=batch_size, epochs=epochs,
+              validation_split=validation)
     return model
 
 
