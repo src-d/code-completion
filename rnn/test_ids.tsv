@@ -1,0 +1,1 @@
+["func", ID_S, "NewRequestConflictError", "(", "err", ID_S, "error", ")", ID_S, "error", "{", "return", ID_S, "NewErrorWithStatusCode", "(", "err", ","]
