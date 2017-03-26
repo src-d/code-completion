@@ -7,9 +7,6 @@ import {
 } from 'vscode';
 import { exec, binPath, LineExchangeProcess } from './process';
 
-const assignRegex = /([a-zA-Z][a-zA-Z0-9]*) *:?= *$/;
-const methodRegex = /([a-zA-Z][a-zA-Z0-9]*)\.$/;
-
 export default class GoCompletionProvider implements CompletionItemProvider {
 	private configured: boolean;
 	private relevanceSorter: LineExchangeProcess;
@@ -25,7 +22,7 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 		const pos = document.offsetAt(position);
 
 		// don't suggest tokens if the previous line has text but the current one is empty
-		if (!document.lineAt(position.line-1).isEmptyOrWhitespace 
+		if (!document.lineAt(position.line - 1).isEmptyOrWhitespace
 			&& document.lineAt(position.line).isEmptyOrWhitespace) {
 			return Promise.resolve([]);
 		}
@@ -37,9 +34,11 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 
 		return this.ensureConfigured().then(() => {
 			return Promise.all([
-				autocompleteSymbol(pos, text)
-					.then(items => items.filter(c => c.label !== 'main'))
-					.then(items => this.sortedCompletions(line, position.character, items)),
+				Promise.all([
+					describe(document, position, text),
+					autocompleteSymbol(pos, text)
+						.then(items => items.filter(c => c.label !== 'main')),
+				]).then(([symbols, items]) => this.sortedCompletions(line, position.character, items, symbols)),
 				this.tokenize(pos, text)
 					.then(tokens => this.suggestNextTokens(tokens)),
 			]).then(([completions, suggestions]) => {
@@ -87,20 +86,15 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 			});
 	}
 
-	sortedCompletions(line: string, pos: number, items: CompletionItem[]): Thenable<CompletionItem[]> {
-		const lineTilPos = line.substring(0, pos).trim();
-		let ident;
-		if (methodRegex.test(lineTilPos)) {
-			ident = methodRegex.exec(lineTilPos)[1];
-		} else if (assignRegex.test(lineTilPos)) {
-			ident = assignRegex.exec(lineTilPos)[1];
+	sortedCompletions(line: string, pos: number, items: CompletionItem[], symbols: string | string[] | undefined): Thenable<CompletionItem[]> {
+		if (!symbols) {
+			return Promise.resolve(items);
 		}
 
-		if (ident) {
-			return this.sortByRelevance(ident, items);
-		}
-
-		return Promise.resolve(items);
+		return this.sortByRelevance(
+			(Array.isArray(symbols) ? symbols : [symbols]).join('@'),
+			items,
+		);
 	}
 
 	tokenize(position: number, text: string): Thenable<string> {
@@ -145,6 +139,83 @@ function autocompleteSymbol(position: number, text: string): Thenable<Completion
 				};
 			}).filter(s => s.kind != null);
 		});
+}
+
+function describe(doc: TextDocument, pos: Position, text: string): Thenable<string | undefined> {
+	const currPos = doc.offsetAt(pos);
+	return runGuru('what', currPos, text, doc.uri.fsPath).then(out => {
+		if (!out) return out;
+
+		const fcall = out['enclosing']
+			.find(c => c['desc'].startsWith('function call'));
+		const assignment = out['enclosing']
+			.find(c => c['desc'] === 'assignment');
+
+		if (fcall && fcall.start < currPos && fcall.end > currPos) {
+			const start: number = fcall['start'];
+			const end: number = fcall['end'] || doc.offsetAt(doc.lineAt(pos.line).range.end);
+			const call = doc.getText(new Range(doc.positionAt(start), doc.positionAt(end)));
+
+			const lparen = call.indexOf('(');
+			const argNum = findArgNum(call.substring(lparen), currPos - start);
+
+			return runGuru('describe', start + lparen - 1, text, doc.uri.fsPath).then(out => {
+				if (!out) return out;
+
+				const type = (out.value && out.value.type) || '';
+				if (type.endsWith('()')) return undefined;
+
+				if (type.startsWith('func')) {
+					const lparen = type.indexOf('(');
+					const args = type.substring(lparen + 1, type.indexOf(')', lparen + 1))
+						.split(',')
+						.map(arg => arg.trim().split(' '));
+
+					if (args.length >= argNum) {
+						return args[argNum - 1][0];
+					}
+				}
+
+				return undefined;
+			});
+		} else if (assignment && assignment.start < currPos && assignment.end > currPos) {
+			const start: number = assignment['start'];
+			const end: number = assignment['end'] || doc.offsetAt(doc.lineAt(pos.line).range.end);
+			const assign = doc.getText(new Range(doc.positionAt(start), doc.positionAt(end)));
+			return extractIdents(assign);
+		}
+
+		return undefined;
+	});
+}
+
+function extractIdents(text: string): Thenable<string[]> {
+	const tokenizer = binPath('tokenizer');
+	return new Promise<string[]>((resolve, reject) => {
+		exec(tokenizer, ['-idents=true'], text)
+			.then(out => {
+				if (out.stdout.startsWith('!ERR')) {
+					reject(out.stdout.substr(out.stdout.indexOf(':')));
+				} else {
+					resolve(out.stdout.split(','));
+				}
+			});
+	});
+}
+
+function runGuru(mode: string, pos: number, text: string, file: string): Thenable<any | undefined> {
+	const guru = binPath('guru');
+	return exec(
+		guru,
+		['-json', '-modified', mode, `${file}:#${pos}`],
+		`${file}\n${text.length}\n${text}`,
+	).then(out => {
+		try {
+			return JSON.parse(out.stdout);
+		} catch (e) {
+			return undefined;
+		}
+	});
 }
 
 function isAlpha(code: number): boolean {
@@ -205,7 +276,7 @@ function processSuggestions(document: TextDocument, pos: Position, completions: 
 
 			if (completionsAdded.length !== completions.length) {
 				const toAdd = completions.filter(c => completionsAdded.indexOf(c.label) < 0)
-					.filter(isOfType(s.substring(s.lastIndexOf('_')+1).toLowerCase()))
+					.filter(isOfType(s.substring(s.lastIndexOf('_') + 1).toLowerCase()))
 					.map((c, j) => withSortKey(c, i, s === 'ID_LIT_BOOL' ? j + 2 : j));
 				result.push(...toAdd);
 				completionsAdded.push(toAdd.map(c => c.label));
@@ -213,7 +284,7 @@ function processSuggestions(document: TextDocument, pos: Position, completions: 
 		} else if (s === '{') {
 			const lineIndent = document.getText(new Range(
 				new Position(pos.line, 0),
-				new Position(pos.line, document.lineAt(pos.line).firstNonWhitespaceCharacterIndex) 
+				new Position(pos.line, document.lineAt(pos.line).firstNonWhitespaceCharacterIndex)
 			));
 			const nextLineRange = document.lineAt(pos.line + 1).range;
 			const nextLine = document.getText(nextLineRange);
@@ -265,8 +336,8 @@ function inQuoted(line: string, pos: number, quote: string): boolean {
 	if (idx >= 0 && idx < pos) {
 		inStr = true;
 		while (idx >= 0 && idx < pos) {
-			idx = line.indexOf(quote, idx+1);
-			if (idx-1 >= 0 && line.charAt(idx-1) != '\\') {
+			idx = line.indexOf(quote, idx + 1);
+			if (idx - 1 >= 0 && line.charAt(idx - 1) != '\\') {
 				inStr = !inStr;
 			}
 		}
@@ -289,4 +360,24 @@ function isOfType(typ: string): (CompletionItem) => boolean {
 		return c => t.indexOf(c.detail) >= 0;
 	}
 	return (c) => c.detail === t;
+}
+
+const openers = ['(', '[', '{'];
+const closers = [')', ']', '}'];
+
+function findArgNum(call: string, pos: number): number {
+	let depth = 0, argNum = 1;
+	for (let i = 0, len = call.length; i < len; i++) {
+		const ch = call.charAt(i);
+		if (i >= pos) {
+			return argNum;
+		} else if (openers.indexOf(ch) >= 0) {
+			depth++;
+		} else if (closers.indexOf(ch) >= 0) {
+			depth--;
+		} else if (ch === ',' && depth === 1) {
+			argNum++;
+		}
+	}
+	return argNum;
 }

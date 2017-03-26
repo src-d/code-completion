@@ -27,7 +27,7 @@ export function activate(context: ExtensionContext) {
     rnnProc = spawn(python, [
         `${context.extensionPath}/../rnn/infer.py`, 
         '--model', 
-        `${context.extensionPath}/../rnn/docker_5000_0.82.hdf`,
+        `${context.extensionPath}/../rnn/docker_toks_11000_GRU_0.8265.hdf`,
         '--number',
         '10',
     ]);
