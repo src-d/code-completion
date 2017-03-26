@@ -22,7 +22,7 @@ export function activate(context: ExtensionContext) {
     const extPath = context.extensionPath;
     relevanceProc = spawnPythonProc('relevance', extPath, 'relevance/relevance.py');
 
-    tokenProc = spawnPythonProc('nextToken', extPath, 'rnn/infer.py', [
+    tokenProc = spawnPythonProc('nextToken', extPath, 'rnn/infer_toks.py', [
         '--model', 
         `${extPath}/../rnn/${tokenModel}`,
         '--number',

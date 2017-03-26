@@ -77,10 +77,11 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 		items = items.filter(c => c.label !== ident);
 		return this.relevanceSorter
 			.write([ident, ...items.map(c => c.label)].join(','))
-			.then(line => {
+			.then(line => {[ident, ...items.map(c => c.label)].join(',')
 				if (line) {
 					const sorted = line.split(',');
 					return items
+						.filter(c => sorted.indexOf(c.label) >= 0)
 						.sort((a, b) => sorted.indexOf(a.label) - sorted.indexOf(b.label));
 				}
 
@@ -199,7 +200,7 @@ function extractIdents(text: string): Thenable<string[]> {
 				if (out.stdout.startsWith('!ERR')) {
 					reject(out.stdout.substr(out.stdout.indexOf(':')));
 				} else {
-					resolve(out.stdout.split(','));
+					resolve(out.stdout.trim().split(','));
 				}
 			});
 	});
