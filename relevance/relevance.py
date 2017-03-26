@@ -34,8 +34,12 @@ def main():
         return
 
       words = line.strip().split(',')
-      ident, words = words[0], words[1:]
-      words = sorted(words, key=lambda x: dist(ident, x))
+      idents, words = words[0].split('@'), words[1:]
+
+      if len(idents) > 0:
+        words = filter(lambda w: w not in idents, words)
+
+      words = sorted(words, key=lambda x: sum([dist(ident, x) for ident in idents]))
       print(','.join(words))
       stdout.flush()
     except:
