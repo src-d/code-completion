@@ -99,7 +99,7 @@ def train(x, y, **kwargs):
         kernel_regularizer=regularizers.l2(regularization),
         input_shape=x[0].shape, activation=activation))
     if dense_neurons > 0:
-        model.add(layers.Dense(dense_neurons, activation="relu"))
+        model.add(layers.Dense(dense_neurons, activation="prelu"))
         model.add(layers.normalization.BatchNormalization())
     model.add(layers.Dense(x[0].shape[-1], activation="softmax"))
     optimizer = getattr(optimizers, optimizer)(lr=learning_rate, clipnorm=1.)
