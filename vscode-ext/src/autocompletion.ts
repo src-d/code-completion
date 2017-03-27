@@ -14,8 +14,8 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	private idGuesser: LineExchangeProcess;
 
 	constructor(
-		relevanceSorter: LineExchangeProcess, 
-		suggester: LineExchangeProcess, 
+		relevanceSorter: LineExchangeProcess,
+		suggester: LineExchangeProcess,
 		idGuesser: LineExchangeProcess,
 	) {
 		this.relevanceSorter = relevanceSorter;
@@ -23,7 +23,11 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 		this.idGuesser = idGuesser;
 	}
 
-	provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken): Thenable<CompletionItem[]> {
+	provideCompletionItems(
+		document: TextDocument,
+		position: Position,
+		token: CancellationToken,
+	): Thenable<CompletionItem[]> {
 		const text = document.getText();
 		const pos = document.offsetAt(position);
 
@@ -52,21 +56,21 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 				this.tokenize(pos, text)
 					.then(tokens => this.suggestNextTokens(tokens)),
 			]).then(([completions, suggestions]) => this.processSuggestions(
-					document,
-					position,
-					completions,
-					suggestions,
+				document,
+				position,
+				completions,
+				suggestions,
 			));
 		});
 	}
 
 	getCompletions(
-		idents: string, 
-		items: CompletionItem[], 
-		tokens: string, 
-		line: string, 
+		idents: string,
+		items: CompletionItem[],
+		tokens: string,
+		line: string,
 		position: Position,
-		): Thenable<CompletionItem[]> {
+	): Thenable<CompletionItem[]> {
 		return this.guessIdentifiers(tokens, items)
 			.then(suggestedItems => {
 				if (!suggestedItems) {
@@ -101,7 +105,8 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 		items = items.filter(c => c.label !== ident);
 		return this.relevanceSorter
 			.write([ident, ...items.map(c => c.label)].join(','))
-			.then(line => {[ident, ...items.map(c => c.label)].join(',')
+			.then(line => {
+				[ident, ...items.map(c => c.label)].join(',')
 				if (line) {
 					const sorted = line.split(',');
 					return items
@@ -113,7 +118,12 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 			});
 	}
 
-	sortedCompletions(line: string, pos: number, items: CompletionItem[], relevantIdents: string | string[] | undefined): Thenable<CompletionItem[]> {
+	sortedCompletions(
+		line: string, 
+		pos: number, 
+		items: CompletionItem[], 
+		relevantIdents: string | string[] | undefined,
+	): Thenable<CompletionItem[]> {
 		if (!relevantIdents) {
 			return Promise.resolve(items);
 		}
@@ -172,7 +182,12 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 		});
 	}
 
-	processSuggestions(document: TextDocument, pos: Position, completions: CompletionItem[], suggestions: string[]): CompletionItem[] {
+	processSuggestions(
+		document: TextDocument, 
+		pos: Position, 
+		completions: CompletionItem[], 
+		suggestions: string[],
+	): CompletionItem[] {
 		if (suggestions.length === 0) {
 			return completions;
 		}
@@ -248,7 +263,11 @@ function autocomplete(position: number, text: string): Thenable<CompletionItem[]
 		});
 }
 
-function extractRelevantIdentifiers(doc: TextDocument, pos: Position, text: string): Thenable<string | undefined> {
+function extractRelevantIdentifiers(
+	doc: TextDocument, 
+	pos: Position, 
+	text: string,
+): Thenable<string | undefined> {
 	const currPos = doc.offsetAt(pos);
 	return runGuru('what', currPos, text, doc.uri.fsPath).then(out => {
 		if (!out) return out;
@@ -310,7 +329,12 @@ function extractIdents(text: string): Thenable<string[]> {
 	});
 }
 
-function runGuru(mode: string, pos: number, text: string, file: string): Thenable<any | undefined> {
+function runGuru(
+	mode: string, 
+	pos: number, 
+	text: string, 
+	file: string,
+): Thenable<any | undefined> {
 	const guru = binPath('guru');
 	return exec(
 		guru,
