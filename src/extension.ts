@@ -11,7 +11,7 @@ const GO_CODE: DocumentFilter = { language: 'go', scheme: 'file' };
 const TRIGGER_CHARS: string[] = ['.', ' ', '\n', '(', ')', '\t', ',', '[', ']'];
 const python = binPath('python3') || binPath('python');
 const tokenModel = 'docker_toks_11000_GRU_0.8265.hdf';
-const idModel = 'docker_ids_6000_0.50.hdf';
+const idModel = 'maximo_ids.hdf';
 
 let relevanceProc: ChildProcess;
 let tokenProc: ChildProcess;
