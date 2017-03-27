@@ -71,6 +71,16 @@ def extract_names(token):
             yield from ret(last)
 
 
+def commaed_int(x):
+    if x < 0:
+        return '-' + commaed_int(-x)
+    result = ''
+    while x >= 1000:
+        x, r = divmod(x, 1000)
+        result = ",%03d%s" % (r, result)
+    return "%d%s" % (x, result)
+
+
 def main():
     args = parse_args()
     maxlen = args.maxlen
@@ -85,6 +95,7 @@ def main():
         x = []
         y = []
         vocabulary = {}
+        samples_num = 0
         with open(args.input) as fin:
             for lineno, line in enumerate(fin):
                 if lineno % 1000 == 0:
@@ -93,16 +104,26 @@ def main():
                     break
                 ctx = eval(line)
                 word = False
+                word_num = 0
                 for c in ctx:
                     if c == ID_S:
                         word = True
+                        word_num += 1
                     elif word:
                         word = False
                         for part in extract_names(c):
                             vocabulary.setdefault(part, len(vocabulary))
-        print("vocabulary:", len(vocabulary))
+                samples_num += max(0, word_num - start_offset)
+        print("vocabulary:", len(vocabulary), "samples:", samples_num)
         with open(args.output + ".voc", "wb") as fout:
             pickle.dump(vocabulary, fout, protocol=-1)
+        x = numpy.zeros((samples_num, maxlen, len(vocabulary)),
+                        dtype=numpy.float32)
+        y = numpy.zeros((samples_num, len(vocabulary)),
+                        dtype=numpy.float32)
+        print("the worst is behind - we allocated %s bytes" %
+              commaed_int(x.nbytes + y.nbytes))
+        samples_num = 0
         with open(args.input) as fin:
             for lineno, line in enumerate(fin):
                 if lineno % 1000 == 0:
@@ -122,21 +143,15 @@ def main():
                         if wadd:
                             words.append(wadd)
                 for i in range(start_offset, len(words)):
-                    sample = numpy.zeros((maxlen, len(vocabulary)),
-                                         dtype=numpy.float32)
                     for j in range(maxlen):
                         k = i - maxlen + j
                         if k >= 0:
                             for c in words[k]:
-                                sample[j, c] = 1
-                    x.append(sample)
-                    myy = numpy.zeros(len(vocabulary), dtype=numpy.float32)
+                                x[samples_num, j, c] = 1
                     for c in words[i]:
-                        myy[c] = 1
-                    myy /= len(words[i])
-                    y.append(myy)
-        x = numpy.array(x, dtype=numpy.float32)
-        y = numpy.array(y, dtype=numpy.float32)
+                        y[samples_num, c] = 1
+                    y[samples_num] /= len(words[i])
+                    samples_num += 1
         if args.cache:
             print("saving the cache...")
             try:
@@ -146,6 +161,12 @@ def main():
                 print(type(e), e)
     print("x:", x.shape)
     print("y:", y.shape)
+    print("shuffling...")
+    numpy.random.seed(777)
+    rng_state = numpy.random.get_state()
+    numpy.random.shuffle(x)
+    numpy.random.set_state(rng_state)
+    numpy.random.shuffle(y)
     model = train(x, y, **args.__dict__)
     model.save(args.output, overwrite=True)
 
