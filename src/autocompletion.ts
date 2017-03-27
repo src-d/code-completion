@@ -366,6 +366,13 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	}
 }
 
+/**
+ * Returns the minimum position between a and b. If one of them is -1,
+ * (it's not present) the other is returned. If both of them are present,
+ * the minimum of the two is returned.
+ * @param a 
+ * @param b 
+ */
 function minPos(a: number, b: number): number {
 	if (a < 0) {
 		return b;
@@ -395,8 +402,8 @@ export function getFuncArg(funcData: any, argNum: number): string | undefined {
 		for (let i = 0, len = argsStr.length; i < len; i++) {
 			const ch = argsStr.charAt(i);
 			if (inName) {
-				const spacePos = argsStr.indexOf(' ', i+1);
-				const commaPos = argsStr.indexOf(',', i+1);
+				const spacePos = argsStr.indexOf(' ', i + 1);
+				const commaPos = argsStr.indexOf(',', i + 1);
 				const idx = minPos(spacePos, commaPos);
 				args.push(argsStr.substring(i, idx).trim());
 
@@ -628,7 +635,7 @@ export function platformBin(platform: string, name: string): string {
  * @param sortedIdents identifiers sorted
  */
 export function sortedItems(
-	items: CompletionItem[], 
+	items: CompletionItem[],
 	sortedIdents: string[],
 ): CompletionItem[] {
 	return items
