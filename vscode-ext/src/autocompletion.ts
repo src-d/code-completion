@@ -34,7 +34,7 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 		// don't suggest tokens if the previous line has text but the current one is empty
 		// and is at the top level
 		if (!document.lineAt(position.line - 1).isEmptyOrWhitespace
-			&& document.lineAt(position.line).range.end.character > 0) {
+			&& document.lineAt(position.line).range.end.character === 0) {
 			return Promise.resolve([]);
 		}
 
@@ -163,23 +163,24 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	}
 
 	guessIdentifiers(tokens: string, items: CompletionItem[]): Thenable<CompletionItem[] | undefined> {
-		return this.idGuesser.write(tokens).then(line => {
-			if (!line.trim()) return undefined;
+		return this.idGuesser.write(tokens)
+			.then(line => {
+				if (!line.trim()) return undefined;
 
-			line.trim()
-				.split(' ')
-				.forEach(p => {
-					const [ident, confidence] = p.split('@');
-					items.filter(it => it.label.toLowerCase().indexOf(ident) >= 0)
-						.forEach(m => {
-							m['confidence'] += confidence;
-						});
-				});
+				line.trim()
+					.split(' ')
+					.forEach(p => {
+						const [ident, confidence] = p.split('@');
+						items.filter(it => it.label.toLowerCase().indexOf(ident) >= 0)
+							.forEach(m => {
+								m['confidence'] += confidence;
+							});
+					});
 
-			return items
-				.filter(it => (it['confidence'] || 0) > 0.4)
-				.sort((a, b) => (a['confidence'] || 0) - (a['confidence'] || 0));
-		});
+				return items
+					.filter(it => (it['confidence'] || 0) > 0.4)
+					.sort((a, b) => (a['confidence'] || 0) - (a['confidence'] || 0));
+			});
 	}
 
 	processSuggestions(
