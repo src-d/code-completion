@@ -1,3 +1,5 @@
-*.pickle
-.idea
+out
+.vscode
+node_modules
 __pycache__
+*.pickle

@@ -24,19 +24,20 @@ export function activate(context: ExtensionContext) {
 
     tokenProc = spawnPythonProc('nextToken', extPath, 'rnn/infer_toks.py', [
         '--model', 
-        `${extPath}/../rnn/${tokenModel}`,
+        `${extPath}/rnn/${tokenModel}`,
         '--number',
         '10',
     ]);
 
     idProc = spawnPythonProc('ids', extPath, 'rnn/infer_ids.py', [
         '--model', 
-        `${extPath}/../rnn/${idModel}`,
+        `${extPath}/rnn/${idModel}`,
     ]);
  
     context.subscriptions.push(languages.registerCompletionItemProvider(
         GO_CODE,
         new GoCompletionProvider(
+            context.extensionPath,
             new LineExchangeProcess(relevanceProc),
             new LineExchangeProcess(tokenProc),
             new LineExchangeProcess(idProc),
@@ -60,7 +61,7 @@ function killProcs(...procs: ChildProcess[]) {
 }
 
 function spawnPythonProc(name: string, extPath: string, script: string, args: string[] = []): ChildProcess {
-    const proc = spawn(python, [`${extPath}/../${script}`].concat(args));
+    const proc = spawn(python, [`${extPath}/${script}`].concat(args));
     proc.stderr.on('data', (data) => {
         console.error(data.toString());
     });

@@ -5,19 +5,23 @@ import {
 	TextDocument, Position, CancellationToken,
 	CompletionItem, CompletionItemKind, Uri, Range, TextEdit,
 } from 'vscode';
-import { exec, binPath, LineExchangeProcess } from './process';
+import { exec, binPath, LineExchangeProcess, binName } from './process';
+import * as path from 'path';
 
 export default class GoCompletionProvider implements CompletionItemProvider {
+	private extPath: string;
 	private configured: boolean;
 	private relevanceSorter: LineExchangeProcess;
 	private suggester: LineExchangeProcess;
 	private idGuesser: LineExchangeProcess;
 
 	constructor(
+		extPath: string,
 		relevanceSorter: LineExchangeProcess,
 		suggester: LineExchangeProcess,
 		idGuesser: LineExchangeProcess,
 	) {
+		this.extPath = extPath;
 		this.relevanceSorter = relevanceSorter;
 		this.suggester = suggester;
 		this.idGuesser = idGuesser;
@@ -46,7 +50,7 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 		return this.ensureConfigured().then(() => {
 			return Promise.all([
 				Promise.all([
-					extractRelevantIdentifiers(document, position, text),
+					this.extractRelevantIdentifiers(document, position, text),
 					autocomplete(pos, text)
 						.then(items => items.filter(c => c.label !== 'main')),
 					this.tokenize(pos, text, true),
@@ -135,7 +139,7 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	}
 
 	tokenize(position: number, text: string, full: boolean = false): Thenable<string> {
-		const tokenizer = binPath('tokenizer');
+		const tokenizer = path.join(this.extPath, 'bin', platformBin('tokenizer'));
 		return new Promise<string>((resolve, reject) => {
 			exec(tokenizer, [`-pos=${position}`].concat(full ? ['-full=true'] : []), text)
 				.then(out => {
@@ -247,6 +251,72 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 
 		return result;
 	}
+
+	extractRelevantIdentifiers(
+		doc: TextDocument, 
+		pos: Position, 
+		text: string,
+	): Thenable<string | undefined> {
+		const currPos = doc.offsetAt(pos);
+		return runGuru('what', currPos, text, doc.uri.fsPath).then(out => {
+			if (!out) return out;
+
+			const fcall = out['enclosing']
+				.find(c => c['desc'].startsWith('function call'));
+			const assignment = out['enclosing']
+				.find(c => c['desc'] === 'assignment');
+
+			if (fcall && fcall.start < currPos && fcall.end > currPos) {
+				const start: number = fcall['start'];
+				const end: number = fcall['end'] || doc.offsetAt(doc.lineAt(pos.line).range.end);
+				const call = doc.getText(new Range(doc.positionAt(start), doc.positionAt(end)));
+
+				const lparen = call.indexOf('(');
+				const argNum = findArgNum(call.substring(lparen), currPos - start);
+
+				return runGuru('describe', start + lparen - 1, text, doc.uri.fsPath).then(out => {
+					if (!out) return out;
+
+					const type = (out.value && out.value.type) || '';
+					if (type.endsWith('()')) return undefined;
+
+					if (type.startsWith('func')) {
+						const lparen = type.indexOf('(');
+						const args = type.substring(lparen + 1, type.indexOf(')', lparen + 1))
+							.split(',')
+							.map(arg => arg.trim().split(' '));
+
+						if (args.length >= argNum) {
+							return args[argNum - 1][0];
+						}
+					}
+
+					return undefined;
+				});
+			} else if (assignment && assignment.start < currPos && assignment.end > currPos) {
+				const start: number = assignment['start'];
+				const end: number = assignment['end'] || doc.offsetAt(doc.lineAt(pos.line).range.end);
+				const assign = doc.getText(new Range(doc.positionAt(start), doc.positionAt(end)));
+				return this.extractIdents(assign);
+			}
+
+			return undefined;
+		});
+	}
+
+	extractIdents(text: string): Thenable<string[]> {
+		const tokenizer = path.join(this.extPath, 'bin', platformBin('tokenizer'));
+		return new Promise<string[]>((resolve, reject) => {
+			exec(tokenizer, ['-idents=true'], text)
+				.then(out => {
+					if (out.stdout.startsWith('!ERR')) {
+						reject(out.stdout.substr(out.stdout.indexOf(':')));
+					} else {
+						resolve(out.stdout.trim().split(','));
+					}
+				});
+		});
+	}
 }
 
 function autocomplete(position: number, text: string): Thenable<CompletionItem[]> {
@@ -262,72 +332,6 @@ function autocomplete(position: number, text: string): Thenable<CompletionItem[]
 				};
 			}).filter(s => s.kind != null);
 		});
-}
-
-function extractRelevantIdentifiers(
-	doc: TextDocument, 
-	pos: Position, 
-	text: string,
-): Thenable<string | undefined> {
-	const currPos = doc.offsetAt(pos);
-	return runGuru('what', currPos, text, doc.uri.fsPath).then(out => {
-		if (!out) return out;
-
-		const fcall = out['enclosing']
-			.find(c => c['desc'].startsWith('function call'));
-		const assignment = out['enclosing']
-			.find(c => c['desc'] === 'assignment');
-
-		if (fcall && fcall.start < currPos && fcall.end > currPos) {
-			const start: number = fcall['start'];
-			const end: number = fcall['end'] || doc.offsetAt(doc.lineAt(pos.line).range.end);
-			const call = doc.getText(new Range(doc.positionAt(start), doc.positionAt(end)));
-
-			const lparen = call.indexOf('(');
-			const argNum = findArgNum(call.substring(lparen), currPos - start);
-
-			return runGuru('describe', start + lparen - 1, text, doc.uri.fsPath).then(out => {
-				if (!out) return out;
-
-				const type = (out.value && out.value.type) || '';
-				if (type.endsWith('()')) return undefined;
-
-				if (type.startsWith('func')) {
-					const lparen = type.indexOf('(');
-					const args = type.substring(lparen + 1, type.indexOf(')', lparen + 1))
-						.split(',')
-						.map(arg => arg.trim().split(' '));
-
-					if (args.length >= argNum) {
-						return args[argNum - 1][0];
-					}
-				}
-
-				return undefined;
-			});
-		} else if (assignment && assignment.start < currPos && assignment.end > currPos) {
-			const start: number = assignment['start'];
-			const end: number = assignment['end'] || doc.offsetAt(doc.lineAt(pos.line).range.end);
-			const assign = doc.getText(new Range(doc.positionAt(start), doc.positionAt(end)));
-			return extractIdents(assign);
-		}
-
-		return undefined;
-	});
-}
-
-function extractIdents(text: string): Thenable<string[]> {
-	const tokenizer = binPath('tokenizer');
-	return new Promise<string[]>((resolve, reject) => {
-		exec(tokenizer, ['-idents=true'], text)
-			.then(out => {
-				if (out.stdout.startsWith('!ERR')) {
-					reject(out.stdout.substr(out.stdout.indexOf(':')));
-				} else {
-					resolve(out.stdout.trim().split(','));
-				}
-			});
-	});
 }
 
 function runGuru(
@@ -452,4 +456,8 @@ function findArgNum(call: string, pos: number): number {
 		}
 	}
 	return argNum;
+}
+
+function platformBin(name: string): string {
+	return binName(`${name}_${process.platform}`);
 }

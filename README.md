@@ -3,19 +3,15 @@
 ## Requirements
 
 * Go installed and setup
-* Python (`python` or `python3` and `pip` in the path) installed
+* Python (`python` or `python3` and `pip` or `pip3` in the path) installed. **NOTE:** pip must be able to run without sudo. If that's not the case, use `install_sudo.sh`.
 * Visual Studio Code installed and binary `code` in path.
 
 ## Install
 
 ```
-mkdir -p $GOPATH/src/github.com/src-d
-cd $GOPATH/src/github.com/src-d
 git clone git@github.com/src-d/code-completion.git
 cd code-completion
-cd tokenizer && go install ./...
-cd ../rnn && pip install -r requirements.txt
-cd ../vscode-ext && code .
+sh install.sh
 ```
 
-Run `F5` to start testing the extension.
+Load extension from VSIX located at `EXTPATH/autocomplete-0.0.1.vsix`.

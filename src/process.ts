@@ -12,7 +12,7 @@ interface CmdOutput {
 
 let binPathCache: { [bin: string]: string | null } = {};
 
-const binName = (name: string): string => process.platform === 'win32' 
+export const binName = (name: string): string => process.platform === 'win32' 
     ? `${name}.exe` 
     : name;
 
