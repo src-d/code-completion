@@ -149,9 +149,9 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	 * @param relevantIdents relevant identifiers to analyze distance from
 	 */
 	sortedCompletions(
-		line: string, 
-		pos: number, 
-		items: CompletionItem[], 
+		line: string,
+		pos: number,
+		items: CompletionItem[],
 		relevantIdents: string | string[] | undefined,
 	): Thenable<CompletionItem[]> {
 		if (!relevantIdents) {
@@ -171,7 +171,7 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	 * @param full return identifier names as well
 	 */
 	tokenize(position: number, text: string, full: boolean = false): Thenable<string> {
-		const tokenizer = path.join(this.extPath, 'bin', platformBin('tokenizer'));
+		const tokenizer = path.join(this.extPath, 'bin', platformBin(process.platform, 'tokenizer'));
 		return new Promise<string>((resolve, reject) => {
 			exec(tokenizer, [`-pos=${position}`].concat(full ? ['-full=true'] : []), text)
 				.then(out => {
@@ -245,9 +245,9 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	 * @param suggestions list of suggested tokens by the token model
 	 */
 	processSuggestions(
-		document: TextDocument, 
-		pos: Position, 
-		completions: CompletionItem[], 
+		document: TextDocument,
+		pos: Position,
+		completions: CompletionItem[],
 		suggestions: string[],
 	): CompletionItem[] {
 		if (suggestions.length === 0) {
@@ -316,8 +316,8 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	 * @param text text in the document
 	 */
 	extractRelevantIdentifiers(
-		doc: TextDocument, 
-		pos: Position, 
+		doc: TextDocument,
+		pos: Position,
 		text: string,
 	): Thenable<string | undefined> {
 		const currPos = doc.offsetAt(pos);
@@ -337,25 +337,11 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 				const lparen = call.indexOf('(');
 				const argNum = findArgNum(call.substring(lparen), currPos - start);
 
-				return runGuru('describe', start + lparen - 1, text, doc.uri.fsPath).then(out => {
-					if (!out) return out;
-
-					const type = (out.value && out.value.type) || '';
-					if (type.endsWith('()')) return undefined;
-
-					if (type.startsWith('func')) {
-						const lparen = type.indexOf('(');
-						const args = type.substring(lparen + 1, type.indexOf(')', lparen + 1))
-							.split(',')
-							.map(arg => arg.trim().split(' '));
-
-						if (args.length >= argNum) {
-							return args[argNum - 1][0];
-						}
-					}
-
-					return undefined;
-				});
+				return runGuru('describe', start + lparen - 1, text, doc.uri.fsPath)
+					.then(funcData => {
+						if (!funcData) return undefined;
+						return getFuncArg(funcData, argNum);
+					});
 			} else if (assignment && assignment.start < currPos && assignment.end > currPos) {
 				const start: number = assignment['start'];
 				const end: number = assignment['end'] || doc.offsetAt(doc.lineAt(pos.line).range.end);
@@ -372,7 +358,7 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	 * @param text text to extract identifiers from
 	 */
 	extractIdents(text: string): Thenable<string[]> {
-		const tokenizer = path.join(this.extPath, 'bin', platformBin('tokenizer'));
+		const tokenizer = path.join(this.extPath, 'bin', platformBin(process.platform, 'tokenizer'));
 		return new Promise<string[]>((resolve, reject) => {
 			exec(tokenizer, ['-idents=true'], text)
 				.then(out => {
@@ -384,6 +370,61 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 				});
 		});
 	}
+}
+
+function minPos(a: number, b: number): number {
+	if (a < 0) {
+		return b;
+	} else if (b < 0) {
+		return a;
+	} else {
+		return Math.min(a, b);
+	}
+}
+
+/**
+ * Returns the name of the desired function argument, given a function data.
+ * Returns undefined if there is no such argument.
+ * @param funcData data about a function
+ * @param argNum argument number
+ */
+export function getFuncArg(funcData: any, argNum: number): string | undefined {
+	const type = (funcData.value && funcData.value.type) || '';
+	if (type.endsWith('()')) return undefined;
+
+	if (type.startsWith('func')) {
+		const lparen = type.indexOf('(');
+		const argsStr = type.substring(lparen + 1, type.lastIndexOf(')')).trim();
+		const args = [];
+
+		let ident = '', inName = true, depth = 0;
+		for (let i = 0, len = argsStr.length; i < len; i++) {
+			const ch = argsStr.charAt(i);
+			if (inName) {
+				const spacePos = argsStr.indexOf(' ', i+1);
+				const commaPos = argsStr.indexOf(',', i+1);
+				const idx = minPos(spacePos, commaPos);
+				args.push(argsStr.substring(i, idx).trim());
+
+				i = idx;
+				if (idx === spacePos) {
+					inName = false;
+				}
+			} else if (ch === '(') {
+				depth++;
+			} else if (ch === ')') {
+				depth--;
+			} else if (ch === ',' && depth === 0) {
+				inName = true;
+			}
+		}
+
+		if (args.length >= argNum) {
+			return args[argNum - 1];
+		}
+	}
+
+	return undefined;
 }
 
 /**
@@ -416,9 +457,9 @@ function autocomplete(position: number, text: string): Thenable<CompletionItem[]
  * @param file file name
  */
 function runGuru(
-	mode: string, 
-	pos: number, 
-	text: string, 
+	mode: string,
+	pos: number,
+	text: string,
 	file: string,
 ): Thenable<any | undefined> {
 	const guru = binPath('guru');
@@ -499,37 +540,34 @@ function withSortKey(item: CompletionItem, i: number, j: number = 0): Completion
  * @param line current complete line
  * @param pos current position in line
  */
-function inString(line: string, pos: number): boolean {
-	let idx;
-	if (inQuoted(line, pos, '"') || inQuoted(line, pos, "'")) {
-		return true;
-	} else if ((idx = line.indexOf('`')) < pos) {
-		const n = Array.from(line.substring(idx, pos)).filter(c => c === '`').length;
-		return n % 2 > 0;
-	}
+export function inString(line: string, pos: number): boolean {
+	let inStr = false, quoted = false, quote = '';
+	for (let i = 0, len = line.length; i < len; i++) {
+		if (i >= pos) {
+			break;
+		}
 
-	return false;
-}
-
-/**
- * Reports whether the current position is inside a quoted content,
- * such as strings and characters.
- * @param line complete current line
- * @param pos current position in the line
- * @param quote type of quote (single, double, ...)
- */
-function inQuoted(line: string, pos: number, quote: string): boolean {
-	let idx = line.indexOf(quote);
-	let inStr = false;
-	if (idx >= 0 && idx < pos) {
-		inStr = true;
-		while (idx >= 0 && idx < pos) {
-			idx = line.indexOf(quote, idx + 1);
-			if (idx - 1 >= 0 && line.charAt(idx - 1) != '\\') {
-				inStr = !inStr;
-			}
+		const ch = line.charAt(i);
+		if (
+			(ch === '\'' || ch === '"')
+			&& !quoted
+			&& (quote === ch || !inStr)
+		) {
+			inStr = !inStr;
+			quote = ch;
+		} else if (
+			ch === '`'
+			&& (quote === ch || !inStr)
+		) {
+			inStr = !inStr;
+			quote = ch;
+		} else if (ch === '\\') {
+			quoted = true;
+		} else if (quoted) {
+			quoted = false;
 		}
 	}
+
 	return inStr;
 }
 
@@ -563,7 +601,7 @@ const closers = [')', ']', '}'];
  * @param call function call without the function name e.g. `(a, b, 1)`
  * @param pos current position from the start of the `call`
  */
-function findArgNum(call: string, pos: number): number {
+export function findArgNum(call: string, pos: number): number {
 	let depth = 0, argNum = 1;
 	for (let i = 0, len = call.length; i < len; i++) {
 		const ch = call.charAt(i);
@@ -585,6 +623,6 @@ function findArgNum(call: string, pos: number): number {
  * This is only for internal bundled binaries such as the tokenizer.
  * @param name name of the binary without extension
  */
-function platformBin(name: string): string {
-	return binName(`${name}_${process.platform}`);
+export function platformBin(platform: string, name: string): string {
+	return binName(`${name}_${platform}`);
 }

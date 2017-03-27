@@ -3,3 +3,5 @@ out
 node_modules
 __pycache__
 *.pickle
+.vscode-test
+*.vsix
