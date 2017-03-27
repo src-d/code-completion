@@ -68,6 +68,14 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 		});
 	}
 
+	/**
+	 * Returns the list of completions sorted by their relevance.
+	 * @param idents relevant identifiers concatenated with @
+	 * @param items autocompletions suggested by gocode
+	 * @param tokens tokens of the code
+	 * @param line current line content
+	 * @param position current position
+	 */
 	getCompletions(
 		idents: string,
 		items: CompletionItem[],
@@ -87,6 +95,9 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 			});
 	}
 
+	/**
+	 * Ensures gocode is configured.
+	 */
 	ensureConfigured(): Thenable<void> {
 		const config = new Promise<void>((resolve, reject) => {
 			if (this.configured) {
@@ -105,6 +116,12 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 		return Promise.all([config]).then(_ => Promise.resolve());
 	}
 
+	/**
+	 * Runs the word2vec model to sort the completions based on their distance
+	 * from the ident.
+	 * @param ident list of identifiers concatenated by @
+	 * @param items list of completions suggested by gocode
+	 */
 	sortByRelevance(ident: string, items: CompletionItem[]): Thenable<CompletionItem[]> {
 		items = items.filter(c => c.label !== ident);
 		return this.relevanceSorter
@@ -122,6 +139,15 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 			});
 	}
 
+	/**
+	 * Runs the word2vec model to sort the completions based on their distance
+	 * from the relevantIdents. If there are no relevant idents, the items will
+	 * be returned directly.
+	 * @param line current line of text
+	 * @param pos current position
+	 * @param items completion items suggested by gocode
+	 * @param relevantIdents relevant identifiers to analyze distance from
+	 */
 	sortedCompletions(
 		line: string, 
 		pos: number, 
@@ -138,6 +164,12 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 		);
 	}
 
+	/**
+	 * Returns the tokens from the start of the scope until the current position.
+	 * @param position current position
+	 * @param text text to extract tokens from
+	 * @param full return identifier names as well
+	 */
 	tokenize(position: number, text: string, full: boolean = false): Thenable<string> {
 		const tokenizer = path.join(this.extPath, 'bin', platformBin('tokenizer'));
 		return new Promise<string>((resolve, reject) => {
@@ -152,6 +184,10 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 		});
 	}
 
+	/**
+	 * Runs the token model and returns the list of possible next tokens.
+	 * @param tokens list of tokens in a format used by the token model
+	 */
 	suggestNextTokens(tokens: string): Thenable<string[]> {
 		tokens = tokens.trim();
 		return this.suggester.write(tokens.trim())
@@ -166,6 +202,12 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 			});
 	}
 
+	/**
+	 * Runs the identifier model to infer identifiers based on the tokens.
+	 * After that, the result is filtered and ranked.
+	 * @param tokens list of tokens in a format required by the model
+	 * @param items autocompletion items suggested by gocode
+	 */
 	guessIdentifiers(tokens: string, items: CompletionItem[]): Thenable<CompletionItem[] | undefined> {
 		return this.idGuesser.write(tokens)
 			.then(line => {
@@ -187,6 +229,21 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 			});
 	}
 
+	/**
+	 * Processes all the completions and suggestions and returns a final list
+	 * of the autocompletion to be suggested by the editor.
+	 * The returned list of completions will be the list of suggested tokens,
+	 * and if one of them is an identifier the completions offered by intellisense
+	 * and word2vec neural network will be appended to the final list. Same with
+	 * literals, but filtering them by their type to match the correct literal
+	 * type.
+	 * @param document complete document instance
+	 * @param pos current position
+	 * @param completions list of identifiers to autocomplete the current position
+	 * after going through a process of sorting by their relevance using the ident
+	 * model and/or the word2vec model.
+	 * @param suggestions list of suggested tokens by the token model
+	 */
 	processSuggestions(
 		document: TextDocument, 
 		pos: Position, 
@@ -252,6 +309,12 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 		return result;
 	}
 
+	/**
+	 * Returns the tokens that are relevant for the autocompletion.
+	 * @param doc complete document
+	 * @param pos current position
+	 * @param text text in the document
+	 */
 	extractRelevantIdentifiers(
 		doc: TextDocument, 
 		pos: Position, 
@@ -304,6 +367,10 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 		});
 	}
 
+	/**
+	 * Returns a list of identifiers in the given text.
+	 * @param text text to extract identifiers from
+	 */
 	extractIdents(text: string): Thenable<string[]> {
 		const tokenizer = path.join(this.extPath, 'bin', platformBin('tokenizer'));
 		return new Promise<string[]>((resolve, reject) => {
@@ -319,6 +386,12 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	}
 }
 
+/**
+ * Runs gocode and finds the suggested autocompletions for the current position
+ * and returns a list of completion items.
+ * @param position current position in text (character based)
+ * @param text complete text of the file
+ */
 function autocomplete(position: number, text: string): Thenable<CompletionItem[]> {
 	const gocode = binPath('gocode');
 	return exec(gocode, ['-f=json', 'autocomplete', 'c' + position], text)
@@ -334,6 +407,14 @@ function autocomplete(position: number, text: string): Thenable<CompletionItem[]
 		});
 }
 
+/**
+ * Runs guru tool and returns an object with the result or undefined
+ * in a promise.
+ * @param mode mode to run gocode (what, describe, ...)
+ * @param pos current position
+ * @param text text in the file
+ * @param file file name
+ */
 function runGuru(
 	mode: string, 
 	pos: number, 
@@ -354,6 +435,10 @@ function runGuru(
 	});
 }
 
+/**
+ * Reports whether the character code is alphanumeric or not.
+ * @param code character code
+ */
 function isAlpha(code: number): boolean {
 	return (code > 47 && code < 58) ||
 		(code > 64 && code < 91) ||
@@ -366,6 +451,10 @@ interface GocodeSuggestion {
 	type: string;
 }
 
+/**
+ * Converts a suggestion class returned by gocode to CompletionItemKind.
+ * @param cls class of the suggestion
+ */
 function classToKind(cls: string): CompletionItemKind {
 	switch (cls) {
 		case 'func':
@@ -385,15 +474,31 @@ function classToKind(cls: string): CompletionItemKind {
 
 const newLineKeywords = ['if', 'for', 'select', 'switch', 'defer', 'go'];
 
+/**
+ * Reports if the suggested token would require a new line to be inserted.
+ * @param suggestion name of the suggested token
+ * @param isEmpty if the line is empty or not
+ */
 function requiresNewLine(suggestion: string, isEmpty: boolean): boolean {
 	return newLineKeywords.indexOf(suggestion) >= 0 && !isEmpty;
 }
 
+/**
+ * Returns a completion item with a sort key added.
+ * @param item completion item to update
+ * @param i first number of the sort key
+ * @param j second number of the sort key
+ */
 function withSortKey(item: CompletionItem, i: number, j: number = 0): CompletionItem {
 	item.sortText = `${i}${j}`;
 	return item;
 }
 
+/**
+ * Reports whether the current position of a line is inside a string.
+ * @param line current complete line
+ * @param pos current position in line
+ */
 function inString(line: string, pos: number): boolean {
 	let idx;
 	if (inQuoted(line, pos, '"') || inQuoted(line, pos, "'")) {
@@ -406,6 +511,13 @@ function inString(line: string, pos: number): boolean {
 	return false;
 }
 
+/**
+ * Reports whether the current position is inside a quoted content,
+ * such as strings and characters.
+ * @param line complete current line
+ * @param pos current position in the line
+ * @param quote type of quote (single, double, ...)
+ */
 function inQuoted(line: string, pos: number, quote: string): boolean {
 	let idx = line.indexOf(quote);
 	let inStr = false;
@@ -430,6 +542,10 @@ const typeMapping: { [k: string]: string[] | string } = {
 	'float': ['float32', 'float64'],
 };
 
+/**
+ * Returns a function to check if a completion item is of a given type or not.
+ * @param typ type of literal
+ */
 function isOfType(typ: string): (CompletionItem) => boolean {
 	const t = typeMapping[typ];
 	if (Array.isArray(t)) {
@@ -441,6 +557,12 @@ function isOfType(typ: string): (CompletionItem) => boolean {
 const openers = ['(', '[', '{'];
 const closers = [')', ']', '}'];
 
+/**
+ * Returns the number of the argument for the current position in a function
+ * call.
+ * @param call function call without the function name e.g. `(a, b, 1)`
+ * @param pos current position from the start of the `call`
+ */
 function findArgNum(call: string, pos: number): number {
 	let depth = 0, argNum = 1;
 	for (let i = 0, len = call.length; i < len; i++) {
@@ -458,6 +580,11 @@ function findArgNum(call: string, pos: number): number {
 	return argNum;
 }
 
+/**
+ * Returns the correct name of a binary for the current platform.
+ * This is only for internal bundled binaries such as the tokenizer.
+ * @param name name of the binary without extension
+ */
 function platformBin(name: string): string {
 	return binName(`${name}_${process.platform}`);
 }

@@ -51,6 +51,10 @@ export function deactivate() {
     killProcs(relevanceProc, tokenProc, idProc);
 }
 
+/**
+ * Kills the given processes.
+ * @param procs processes to kill
+ */
 function killProcs(...procs: ChildProcess[]) {
     procs.forEach(proc => {
         if (proc) {
@@ -60,6 +64,14 @@ function killProcs(...procs: ChildProcess[]) {
     });
 }
 
+/**
+ * Spawns a python script in the extension path and prints to console all 
+ * errors that may occur.
+ * @param name name of the process, only for log purposes
+ * @param extPath path of the extension
+ * @param script script to run
+ * @param args arguments of the script
+ */
 function spawnPythonProc(name: string, extPath: string, script: string, args: string[] = []): ChildProcess {
     const proc = spawn(python, [`${extPath}/${script}`].concat(args));
     proc.stderr.on('data', (data) => {
