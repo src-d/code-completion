@@ -52,11 +52,10 @@ def main():
           preds = model.predict(x, verbose=0)[0]
           best = numpy.argsort(preds)[::-1][:args.number]
           preds /= preds[best[0]]
-          sys.stdout.write(
-            " ".join("%s@%.3f" % (ivoc[i], preds[i]) for i in best))
+          print(" ".join("%s@%.3f" % (ivoc[i], preds[i]) for i in best))
           sys.stdout.flush()
-        except:
-          sys.stdout.write("\n")
+        except Exception as e:
+          print('')
           sys.stdout.flush()
     backend.clear_session()
 
