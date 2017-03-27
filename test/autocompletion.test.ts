@@ -2,6 +2,7 @@ import * as assert from 'assert';
 
 import { 
     inString, getFuncArg, findArgNum, platformBin,
+    sortedItems,
 } from '../src/autocompletion';
 
 suite("Autocompletion Tests", () => {
@@ -63,5 +64,18 @@ suite("Autocompletion Tests", () => {
                 `${type} ${num}`,
             );
         });
+    });
+
+    test('sortedItems', () => {
+        const items = [
+            { label: 'foo' },
+            { label: 'bar' },
+            { label: 'baz' },
+        ];
+
+        assert.deepEqual(
+            sortedItems(items, ['baz', 'foo', 'qux']).map(i => i.label),
+            ['baz', 'foo'],
+        );
     });
 });

@@ -99,7 +99,7 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	 * Ensures gocode is configured.
 	 */
 	ensureConfigured(): Thenable<void> {
-		const config = new Promise<void>((resolve, reject) => {
+		return new Promise<void>((resolve, reject) => {
 			if (this.configured) {
 				return resolve();
 			}
@@ -112,8 +112,6 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 				this.configured = true;
 			});
 		});
-
-		return Promise.all([config]).then(_ => Promise.resolve());
 	}
 
 	/**
@@ -127,12 +125,8 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 		return this.relevanceSorter
 			.write([ident, ...items.map(c => c.label)].join(','))
 			.then(line => {
-				[ident, ...items.map(c => c.label)].join(',')
 				if (line) {
-					const sorted = line.split(',');
-					return items
-						.filter(c => sorted.indexOf(c.label) >= 0)
-						.sort((a, b) => sorted.indexOf(a.label) - sorted.indexOf(b.label));
+					return sortedItems(items, line.split(','));
 				}
 
 				return items;
@@ -625,4 +619,21 @@ export function findArgNum(call: string, pos: number): number {
  */
 export function platformBin(platform: string, name: string): string {
 	return binName(`${name}_${platform}`);
+}
+
+/**
+ * Returns the items present in sortedIdents ordered by their position in
+ * sortedIdents.
+ * @param items autocompletion items
+ * @param sortedIdents identifiers sorted
+ */
+export function sortedItems(
+	items: CompletionItem[], 
+	sortedIdents: string[],
+): CompletionItem[] {
+	return items
+		.filter(c => sortedIdents.indexOf(c.label) >= 0)
+		.sort((a, b) => (
+			sortedIdents.indexOf(a.label) - sortedIdents.indexOf(b.label)
+		));
 }
