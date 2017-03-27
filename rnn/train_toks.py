@@ -17,12 +17,13 @@ def parse_args():
     parser.add_argument("--start-offset", type=int, default=4)
     parser.add_argument("--validation", type=float, default=0)
     parser.add_argument("--neurons", type=int, default=128)
+    parser.add_argument("--dense-neurons", type=int, default=0)
     parser.add_argument("--learning-rate", type=float, default=0.001)
     parser.add_argument("--type", default="LSTM")
     parser.add_argument("--dropout", type=float, default=0)
     parser.add_argument("--regularization", type=float, default=0)
     parser.add_argument("--recurrent-dropout", type=float, default=0)
-    parser.add_argument("--activation", default="sigmoid")
+    parser.add_argument("--activation", default="tanh")
     parser.add_argument("--optimizer", default="rmsprop")
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--epochs", type=int, default=50)
@@ -76,10 +77,11 @@ def main():
 
 def train(x, y, **kwargs):
     neurons = kwargs.get("neurons", 128)
+    dense_neurons = kwargs.get("dense_neurons", 0)
     learning_rate = kwargs.get("learning_rate", 0.001)
     dropout = kwargs.get("dropout", 0)
     recurrent_dropout = kwargs.get("recurrent_dropout", 0)
-    activation = kwargs.get("activation", "sigmoid")
+    activation = kwargs.get("activation", "tanh")
     optimizer = kwargs.get("optimizer", "rmsprop")
     regularization = kwargs.get("regularization", 0)
     batch_size = kwargs.get("batch_size", 128)
@@ -89,13 +91,17 @@ def train(x, y, **kwargs):
     model = models.Sequential()
     model.add(getattr(layers, layer_type)(
         neurons, dropout=dropout, recurrent_dropout=recurrent_dropout,
+        activation=activation,
         kernel_regularizer=regularizers.l2(regularization),
         input_shape=x[0].shape, return_sequences=True))
     model.add(getattr(layers, layer_type)(
         neurons // 2, dropout=dropout, recurrent_dropout=recurrent_dropout,
         kernel_regularizer=regularizers.l2(regularization),
-        input_shape=x[0].shape))
-    model.add(layers.Dense(x[0].shape[-1], activation=activation))
+        input_shape=x[0].shape, activation=activation))
+    if dense_neurons > 0:
+        model.add(layers.Dense(dense_neurons, activation="relu"))
+        model.add(layers.normalization.BatchNormalization())
+    model.add(layers.Dense(x[0].shape[-1], activation="softmax"))
     optimizer = getattr(optimizers, optimizer)(lr=learning_rate, clipnorm=1.)
     model.compile(loss="categorical_crossentropy", optimizer=optimizer,
                   metrics=["accuracy", "top_k_categorical_accuracy"])
