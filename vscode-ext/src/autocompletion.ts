@@ -13,7 +13,11 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	private suggester: LineExchangeProcess;
 	private idGuesser: LineExchangeProcess;
 
-	constructor(relevanceSorter: LineExchangeProcess, suggester: LineExchangeProcess, idGuesser: LineExchangeProcess) {
+	constructor(
+		relevanceSorter: LineExchangeProcess, 
+		suggester: LineExchangeProcess, 
+		idGuesser: LineExchangeProcess,
+	) {
 		this.relevanceSorter = relevanceSorter;
 		this.suggester = suggester;
 		this.idGuesser = idGuesser;
@@ -24,8 +28,9 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 		const pos = document.offsetAt(position);
 
 		// don't suggest tokens if the previous line has text but the current one is empty
+		// and is at the top level
 		if (!document.lineAt(position.line - 1).isEmptyOrWhitespace
-			&& document.lineAt(position.line).isEmptyOrWhitespace) {
+			&& document.lineAt(position.line).range.end.character > 0) {
 			return Promise.resolve([]);
 		}
 
@@ -37,31 +42,41 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 		return this.ensureConfigured().then(() => {
 			return Promise.all([
 				Promise.all([
-					describe(document, position, text),
-					autocompleteSymbol(pos, text)
+					extractRelevantIdentifiers(document, position, text),
+					autocomplete(pos, text)
 						.then(items => items.filter(c => c.label !== 'main')),
 					this.tokenize(pos, text, true),
-				]).then(([symbols, items, tokens]) => this.guessIdentifiers(tokens, items)
-					.then(suggestedItems => {
-						if (!suggestedItems) {
-							return this.sortedCompletions(
-								line, position.character, items, symbols,
-							);
-						}
-
-						return suggestedItems;
-					})),
+				]).then(([idents, items, tokens]) => this.getCompletions(
+					idents, items, tokens, line, position,
+				)),
 				this.tokenize(pos, text)
 					.then(tokens => this.suggestNextTokens(tokens)),
-			]).then(([completions, suggestions]) => {
-				return processSuggestions(
+			]).then(([completions, suggestions]) => this.processSuggestions(
 					document,
 					position,
 					completions,
 					suggestions,
-				);
-			});
+			));
 		});
+	}
+
+	getCompletions(
+		idents: string, 
+		items: CompletionItem[], 
+		tokens: string, 
+		line: string, 
+		position: Position,
+		): Thenable<CompletionItem[]> {
+		return this.guessIdentifiers(tokens, items)
+			.then(suggestedItems => {
+				if (!suggestedItems) {
+					return this.sortedCompletions(
+						line, position.character, items, idents,
+					);
+				}
+
+				return suggestedItems;
+			});
 	}
 
 	ensureConfigured(): Thenable<void> {
@@ -98,13 +113,13 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 			});
 	}
 
-	sortedCompletions(line: string, pos: number, items: CompletionItem[], symbols: string | string[] | undefined): Thenable<CompletionItem[]> {
-		if (!symbols) {
+	sortedCompletions(line: string, pos: number, items: CompletionItem[], relevantIdents: string | string[] | undefined): Thenable<CompletionItem[]> {
+		if (!relevantIdents) {
 			return Promise.resolve(items);
 		}
 
 		return this.sortByRelevance(
-			(Array.isArray(symbols) ? symbols : [symbols]).join('@'),
+			(Array.isArray(relevantIdents) ? relevantIdents : [relevantIdents]).join('@'),
 			items,
 		);
 	}
@@ -156,9 +171,69 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 				.sort((a, b) => (a['confidence'] || 0) - (a['confidence'] || 0));
 		});
 	}
+
+	processSuggestions(document: TextDocument, pos: Position, completions: CompletionItem[], suggestions: string[]): CompletionItem[] {
+		if (suggestions.length === 0) {
+			return completions;
+		}
+
+		const result = [];
+		let completionsAdded = [];
+		suggestions.forEach((suggestion, i) => {
+			let [s, confidence] = suggestion.split('@');
+			s = s.startsWith("'") ? s.substring(1, s.length - 1) : s;
+			if (Number(confidence) < 0.3) {
+				return;
+			}
+
+			if (s === 'ID_S' && completionsAdded.length != completions.length) {
+				result.push(...completions
+					.filter(c => completionsAdded.indexOf(c.label) < 0)
+					.map((c, j) => withSortKey(c, i, j)));
+				completionsAdded.push(completions.map(c => c.label));
+			} else if (s.startsWith('ID_LIT_')) {
+				if (s === 'ID_LIT_BOOL') {
+					result.push([
+						{ label: 'true', insertText: 'true', kind: CompletionItemKind.Keyword },
+						{ label: 'false', insertText: 'false', kind: CompletionItemKind.Keyword },
+					].map((c, j) => withSortKey(c, i, j)));
+				}
+
+				if (completionsAdded.length !== completions.length) {
+					const toAdd = completions.filter(c => completionsAdded.indexOf(c.label) < 0)
+						.filter(isOfType(s.substring(s.lastIndexOf('_') + 1).toLowerCase()))
+						.map((c, j) => withSortKey(c, i, s === 'ID_LIT_BOOL' ? j + 2 : j));
+					result.push(...toAdd);
+					completionsAdded.push(toAdd.map(c => c.label));
+				}
+			} else if (s === '{') {
+				const lineIndent = document.getText(new Range(
+					new Position(pos.line, 0),
+					new Position(pos.line, document.lineAt(pos.line).firstNonWhitespaceCharacterIndex)
+				));
+				const nextLineRange = document.lineAt(pos.line + 1).range;
+				const nextLine = document.getText(nextLineRange);
+				result.push(withSortKey({
+					label: s,
+					kind: CompletionItemKind.Unit,
+					insertText: s + '\n\t',
+					additionalTextEdits: [TextEdit.replace(nextLineRange, `${lineIndent}}\n${nextLine}`)],
+				}, i));
+			} else if (!s.startsWith('ID_')) {
+				const prefix = requiresNewLine(s, document.lineAt(pos.line).isEmptyOrWhitespace) ? '\n' : '';
+				result.push(withSortKey({
+					label: s,
+					insertText: prefix + s,
+					kind: CompletionItemKind.Keyword,
+				}, i));
+			}
+		});
+
+		return result;
+	}
 }
 
-function autocompleteSymbol(position: number, text: string): Thenable<CompletionItem[]> {
+function autocomplete(position: number, text: string): Thenable<CompletionItem[]> {
 	const gocode = binPath('gocode');
 	return exec(gocode, ['-f=json', 'autocomplete', 'c' + position], text)
 		.then(output => {
@@ -173,7 +248,7 @@ function autocompleteSymbol(position: number, text: string): Thenable<Completion
 		});
 }
 
-function describe(doc: TextDocument, pos: Position, text: string): Thenable<string | undefined> {
+function extractRelevantIdentifiers(doc: TextDocument, pos: Position, text: string): Thenable<string | undefined> {
 	const currPos = doc.offsetAt(pos);
 	return runGuru('what', currPos, text, doc.uri.fsPath).then(out => {
 		if (!out) return out;
@@ -277,66 +352,6 @@ function classToKind(cls: string): CompletionItemKind {
 		default:
 			return null;
 	}
-}
-
-function processSuggestions(document: TextDocument, pos: Position, completions: CompletionItem[], suggestions: string[]): CompletionItem[] {
-	if (suggestions.length === 0) {
-		return completions;
-	}
-
-	const result = [];
-	let completionsAdded = [];
-	suggestions.forEach((suggestion, i) => {
-		let [s, confidence] = suggestion.split('@');
-		s = s.startsWith("'") ? s.substring(1, s.length - 1) : s;
-		if (Number(confidence) < 0.3) {
-			return;
-		}
-
-		if (s === 'ID_S' && completionsAdded.length != completions.length) {
-			result.push(...completions
-				.filter(c => completionsAdded.indexOf(c.label) < 0)
-				.map((c, j) => withSortKey(c, i, j)));
-			completionsAdded.push(completions.map(c => c.label));
-		} else if (s.startsWith('ID_LIT_')) {
-			if (s === 'ID_LIT_BOOL') {
-				result.push([
-					{ label: 'true', insertText: 'true', kind: CompletionItemKind.Keyword },
-					{ label: 'false', insertText: 'false', kind: CompletionItemKind.Keyword },
-				].map((c, j) => withSortKey(c, i, j)));
-			}
-
-			if (completionsAdded.length !== completions.length) {
-				const toAdd = completions.filter(c => completionsAdded.indexOf(c.label) < 0)
-					.filter(isOfType(s.substring(s.lastIndexOf('_') + 1).toLowerCase()))
-					.map((c, j) => withSortKey(c, i, s === 'ID_LIT_BOOL' ? j + 2 : j));
-				result.push(...toAdd);
-				completionsAdded.push(toAdd.map(c => c.label));
-			}
-		} else if (s === '{') {
-			const lineIndent = document.getText(new Range(
-				new Position(pos.line, 0),
-				new Position(pos.line, document.lineAt(pos.line).firstNonWhitespaceCharacterIndex)
-			));
-			const nextLineRange = document.lineAt(pos.line + 1).range;
-			const nextLine = document.getText(nextLineRange);
-			result.push(withSortKey({
-				label: s,
-				kind: CompletionItemKind.Unit,
-				insertText: s + '\n\t',
-				additionalTextEdits: [TextEdit.replace(nextLineRange, `${lineIndent}}\n${nextLine}`)],
-			}, i));
-		} else if (!s.startsWith('ID_')) {
-			const prefix = requiresNewLine(s, document.lineAt(pos.line).isEmptyOrWhitespace) ? '\n' : '';
-			result.push(withSortKey({
-				label: s,
-				insertText: prefix + s,
-				kind: CompletionItemKind.Keyword,
-			}, i));
-		}
-	});
-
-	return result;
 }
 
 const newLineKeywords = ['if', 'for', 'select', 'switch', 'defer', 'go'];
