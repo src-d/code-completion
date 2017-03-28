@@ -34,6 +34,8 @@ function exists(file: string): boolean {
 
 /**
  * Returns the path of a binary in the PATH environment variable.
+ * If the binary is not on the PATH environment variable, it will
+ * try looking for it on $GOPATH/bin folder.
  * @param binary binary to search
  */
 export function binPath(binary: string): string | null {
@@ -46,6 +48,14 @@ export function binPath(binary: string): string | null {
     binPathCache[binary] = paths
         .map(p => path.join(p, binary))
         .find((p) => exists(p));
+
+    if (!binPathCache[binary]) {
+        const p = path.join(process.env['GOPATH'], 'bin', binary);
+        if (exists(p)) {
+            binPathCache[binary] = p;
+        }
+    }
+
     return binPathCache[binary];
 }
 
