@@ -10,6 +10,7 @@ with open("/dev/null", "w") as devnull:
     from keras import models, backend
     sys.stderr = stderr
     del stderr
+from nltk.stem.snowball import SnowballStemmer
 
 from tokens import *
 from train_ids import extract_names
@@ -32,6 +33,7 @@ def main():
     for key, val in vocabulary.items():
         ivoc[val] = key
     maxlen = model.inputs[0].shape[1].value
+    stemmer = SnowballStemmer("english")
     x = numpy.zeros((1, maxlen, len(vocabulary)))
     for line in sys.stdin:
         try:
@@ -46,7 +48,8 @@ def main():
                   word = False
                   if args.only_public and c[0].islower() and c not in BUILTINS:
                       continue
-                  wadd = tuple(vocabulary[p] for p in extract_names(c))
+                  wadd = tuple(vocabulary[stemmer.stem(p)]
+                               for p in extract_names(c))
                   if wadd:
                       words.append(wadd)
           for i, w in enumerate(words):
