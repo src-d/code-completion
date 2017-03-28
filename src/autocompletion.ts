@@ -317,6 +317,10 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 			}
 		});
 
+		if (result.length === 0) {
+			return completions;
+		}
+
 		return result;
 	}
 
