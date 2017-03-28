@@ -32,6 +32,7 @@ def parse_args():
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--cache", action="store_true")
+    parser.add_argument("--shuffle", action="store_true")
     return parser.parse_args()
 
 
@@ -93,11 +94,9 @@ def main():
         with open(args.input + ".pickle", "rb") as fin:
             x, y = pickle.load(fin)
     else:
-        x = []
-        y = []
         vocabulary = {}
         samples_num = 0
-        with open(args.input) as fin:
+        with open(args.input, errors="ignore") as fin:
             for lineno, line in enumerate(fin):
                 if lineno % 1000 == 0:
                     print("line #%d" % lineno)
@@ -125,7 +124,7 @@ def main():
         print("the worst is behind - we allocated %s bytes" %
               commaed_int(x.nbytes + y.nbytes))
         samples_num = 0
-        with open(args.input) as fin:
+        with open(args.input, errors="ignore") as fin:
             for lineno, line in enumerate(fin):
                 if lineno % 1000 == 0:
                     print("line #%d" % lineno)
@@ -163,11 +162,12 @@ def main():
     print("x:", x.shape)
     print("y:", y.shape)
     print("shuffling...")
-    numpy.random.seed(777)
-    rng_state = numpy.random.get_state()
-    numpy.random.shuffle(x)
-    numpy.random.set_state(rng_state)
-    numpy.random.shuffle(y)
+    if args.shuffle:
+        numpy.random.seed(777)
+        rng_state = numpy.random.get_state()
+        numpy.random.shuffle(x)
+        numpy.random.set_state(rng_state)
+        numpy.random.shuffle(y)
     model = train(x, y, **args.__dict__)
     model.save(args.output, overwrite=True)
 
