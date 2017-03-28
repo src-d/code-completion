@@ -74,7 +74,7 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 					idents, items, tokens, line, position,
 				)),
 				this.tokenize(pos, text)
-					.then(tokens => this.suggestNextTokens(tokens)),
+					.then(tokens => this.suggestNextTokens(tokens, line)),
 			]).then(([completions, suggestions]) => this.processSuggestions(
 				document,
 				position,
@@ -198,14 +198,18 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	 * Runs the token model and returns the list of possible next tokens.
 	 * @param tokens list of tokens in a format used by the token model
 	 */
-	suggestNextTokens(tokens: string): Thenable<string[]> {
+	suggestNextTokens(tokens: string, line: string): Thenable<string[]> {
 		tokens = tokens.trim();
+		if (!line.trim()) {
+			tokens.substring(0, tokens.length - 1) + ', ";"]';
+		}
+
 		return this.suggester.write(tokens.trim())
 			.then(line => {
 				const suggestions = line.trim().split(' ');
 				if (suggestions[0].startsWith("';'")) {
 					const nextTokens = tokens.substring(0, tokens.length - 1) + ', ";"]';
-					return this.suggestNextTokens(nextTokens);
+					return this.suggestNextTokens(nextTokens, line);
 				}
 
 				return suggestions;
@@ -265,12 +269,14 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 			return completions;
 		}
 
+		const line = document.getText(document.lineAt(pos.line).range);
+
 		const result = [];
 		let completionsAdded = [];
 		suggestions.forEach((suggestion, i) => {
 			let [s, confidence] = suggestion.split('@');
 			s = s.startsWith("'") ? s.substring(1, s.length - 1) : s;
-			if (Number(confidence) < 0.3) {
+			if (line.trim().length > 0 && Number(confidence) < 0.3) {
 				return;
 			}
 
