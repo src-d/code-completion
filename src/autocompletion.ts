@@ -8,6 +8,10 @@ import {
 import { exec, binPath, LineExchangeProcess, binName } from './process';
 import * as path from 'path';
 
+const mainPkgRegex = /package main/g;
+const funcRegex = /^func *$/;
+const mainFuncRegex = /func main()/g;
+
 export default class GoCompletionProvider implements CompletionItemProvider {
 	private extPath: string;
 	private configured: boolean;
@@ -45,6 +49,18 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 		const line = document.getText(document.lineAt(position.line).range);
 		if (inString(line, position.character)) {
 			return Promise.resolve([]);
+		}
+
+		if (mainPkgRegex.test(text)
+			&& !mainFuncRegex.test(text)
+			&& funcRegex.test(line)) {
+			return Promise.resolve([{
+				label: 'main',
+				kind: CompletionItemKind.Variable,
+				insertText: 'main() {\n\t',
+				detail: 'func main()',
+				additionalTextEdits: [TextEdit.insert(new Position(position.line + 1, 0), "}\n")],
+			}]);
 		}
 
 		return this.ensureConfigured().then(() => {
