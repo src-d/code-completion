@@ -2,7 +2,7 @@
     "name": "autocomplete",
     "displayName": "autocomplete",
     "description": "Autocompletion for Go with neural networks",
-    "version": "0.0.8",
+    "version": "0.0.9",
     "publisher": "sourced",
     "engines": {
         "vscode": "^1.10.0"

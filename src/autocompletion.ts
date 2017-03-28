@@ -183,7 +183,7 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	tokenize(position: number, text: string, full: boolean = false): Thenable<string> {
 		const tokenizer = path.join(this.extPath, 'bin', platformBin(process.platform, 'tokenizer'));
 		return new Promise<string>((resolve, reject) => {
-			exec(tokenizer, [`-pos=${position}`].concat(full ? ['-full=true'] : []), text)
+			exec(tokenizer, [`-pos=${position+1}`].concat(full ? ['-full=true'] : []), text + ' ')
 				.then(out => {
 					if (out.stdout.startsWith('!ERR')) {
 						reject(out.stdout.substr(out.stdout.indexOf(':')));

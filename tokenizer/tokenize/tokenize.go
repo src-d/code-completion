@@ -10,7 +10,7 @@ import (
 )
 
 func TokenizeScope(content []byte, pos int, full bool) TokenList {
-	if len(content) > pos {
+	if len(content) >= pos {
 		contentSoFar := string(content[:pos])
 		idx := strings.LastIndex(contentSoFar, "\nfunc ")
 		if idx >= 0 {
