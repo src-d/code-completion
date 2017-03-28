@@ -101,7 +101,7 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	): Thenable<CompletionItem[]> {
 		return this.guessIdentifiers(tokens, items)
 			.then(suggestedItems => {
-				if (!suggestedItems) {
+				if (!suggestedItems || suggestedItems.length === 0) {
 					return this.sortedCompletions(
 						line, position.character, items, idents,
 					);
@@ -221,21 +221,22 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	guessIdentifiers(tokens: string, items: CompletionItem[]): Thenable<CompletionItem[] | undefined> {
 		return this.idGuesser.write(tokens)
 			.then(line => {
-				if (!line.trim()) return undefined;
+				if (!line.trim()) return items;
 
+				const confidences = {};
 				line.trim()
 					.split(' ')
 					.forEach(p => {
 						const [ident, confidence] = p.split('@');
 						items.filter(it => it.label.toLowerCase().indexOf(ident) >= 0)
 							.forEach(m => {
-								m['confidence'] += confidence;
+								confidences[m.label] += confidence;
 							});
 					});
 
 				return items
-					.filter(it => (it['confidence'] || 0) > 0.4)
-					.sort((a, b) => (a['confidence'] || 0) - (a['confidence'] || 0));
+					.filter(it => (confidences[it.label] || 0) > 0.4)
+					.sort((a, b) => (confidences[a.label] || 0) - (confidences[b.label] || 0));
 			});
 	}
 
@@ -273,14 +274,14 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 				return;
 			}
 
-			if (s === 'ID_S' && completionsAdded.length != completions.length) {
+			if (s === 'ID_S' && completionsAdded.length < completions.length) {
 				result.push(...completions
 					.filter(c => completionsAdded.indexOf(c.label) < 0)
 					.map((c, j) => withSortKey(c, i, j)));
-				completionsAdded.push(completions.map(c => c.label));
+				completionsAdded.push(...completions.map(c => c.label));
 			} else if (s.startsWith('ID_LIT_')) {
 				if (s === 'ID_LIT_BOOL') {
-					result.push([
+					result.push(...[
 						{ label: 'true', insertText: 'true', kind: CompletionItemKind.Keyword },
 						{ label: 'false', insertText: 'false', kind: CompletionItemKind.Keyword },
 					].map((c, j) => withSortKey(c, i, j)));
@@ -291,7 +292,7 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 						.filter(isOfType(s.substring(s.lastIndexOf('_') + 1).toLowerCase()))
 						.map((c, j) => withSortKey(c, i, s === 'ID_LIT_BOOL' ? j + 2 : j));
 					result.push(...toAdd);
-					completionsAdded.push(toAdd.map(c => c.label));
+					completionsAdded.push(...toAdd.map(c => c.label));
 				}
 			} else if (s === '{') {
 				const lineIndent = document.getText(new Range(
