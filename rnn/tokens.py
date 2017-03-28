@@ -46,3 +46,11 @@ token_map = {t: _index2array(i) for i, t in enumerate(_tokens)}
 def prediction2token(preds, number):
     indices = numpy.argsort(preds)[::-1][:number]
     return [(_tokens[i], preds[i] / preds[indices[0]]) for i in indices]
+
+BUILTINS = {"append", "cap", "close", "complex", "copy", "delete", "imag",
+            "len", "make", "new", "panic", "print", "println", "real",
+            "recover", "ComplexType", "FloatType", "IntegerType", "Type",
+            "Type1", "bool", "byte", "complex128", "complex64", "error",
+            "float32", "float64", "int", "int16", "int32", "int64", "int8",
+            "rune", "string", "uint", "uint16", "uint32", "uint64", "uint8",
+            "uintptr"}

@@ -5,6 +5,7 @@ import re
 import sys
 
 from keras import models, layers, regularizers, optimizers
+from nltk.stem.snowball import SnowballStemmer
 
 from tokens import *
 
@@ -33,6 +34,7 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--cache", action="store_true")
     parser.add_argument("--shuffle", action="store_true")
+    parser.add_argument("--only-public", action="store_true")
     return parser.parse_args()
 
 
@@ -87,7 +89,9 @@ def main():
     args = parse_args()
     maxlen = args.maxlen
     maxlines = args.maxlines
+    public = args.only_public
     start_offset = args.start_offset
+    stemmer = SnowballStemmer("english")
 
     if os.path.exists(args.input + ".pickle"):
         print("loading the cached dataset...")
@@ -108,10 +112,13 @@ def main():
                 for c in ctx:
                     if c == ID_S:
                         word = True
-                        word_num += 1
                     elif word:
                         word = False
+                        if public and c[0].islower() and c not in BUILTINS:
+                            continue
+                        word_num += 1
                         for part in extract_names(c):
+                            part = stemmer.stem(part)
                             vocabulary.setdefault(part, len(vocabulary))
                 samples_num += max(0, word_num - start_offset)
         print("vocabulary:", len(vocabulary), "samples:", samples_num)
@@ -138,8 +145,10 @@ def main():
                         word = True
                     elif word:
                         word = False
-                        wadd = tuple(
-                            vocabulary[p] for p in extract_names(c))
+                        if public and c[0].islower() and c not in BUILTINS:
+                            continue
+                        wadd = tuple(vocabulary[stemmer.stem(p)]
+                                     for p in extract_names(c))
                         if wadd:
                             words.append(wadd)
                 for i in range(start_offset, len(words)):

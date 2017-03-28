@@ -19,6 +19,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
     parser.add_argument("--number", type=int, default=5)
+    parser.add_argument("--only-public", action="store_true")
     return parser.parse_args()
 
 
@@ -43,6 +44,8 @@ def main():
                   word = True
               elif word:
                   word = False
+                  if args.only_public and c[0].islower() and c not in BUILTINS:
+                      continue
                   wadd = tuple(vocabulary[p] for p in extract_names(c))
                   if wadd:
                       words.append(wadd)
