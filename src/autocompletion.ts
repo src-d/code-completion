@@ -63,12 +63,18 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 			}]);
 		}
 
+		const lastFuncIdx = text.substring(0, pos).lastIndexOf('\nfunc');
+		const lastFunc = text.substring(
+			text.indexOf(' ', lastFuncIdx), 
+			text.indexOf('(', lastFuncIdx),
+		).trim();
+
 		return this.ensureConfigured().then(() => {
 			return Promise.all([
 				Promise.all([
 					this.extractRelevantIdentifiers(document, position, text),
 					autocomplete(pos, text)
-						.then(items => items.filter(c => c.label !== 'main')),
+						.then(items => items.filter(c => c.label !== 'main' && c.label !== lastFunc)),
 					this.tokenize(pos, text, true),
 				]).then(([idents, items, tokens]) => this.getCompletions(
 					idents, items, tokens, line, position,
