@@ -32,6 +32,7 @@ export function activate(context: ExtensionContext) {
     idProc = spawnPythonProc('ids', extPath, 'rnn/infer_ids.py', [
         '--model', 
         `${extPath}/rnn/${idModel}`,
+        '--only-public',
     ]);
  
     context.subscriptions.push(languages.registerCompletionItemProvider(
