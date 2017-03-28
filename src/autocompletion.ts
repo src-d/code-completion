@@ -301,12 +301,19 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 				));
 				const nextLineRange = document.lineAt(pos.line + 1).range;
 				const nextLine = document.getText(nextLineRange);
-				result.push(withSortKey({
-					label: s,
-					kind: CompletionItemKind.Unit,
-					insertText: s + '\n\t',
-					additionalTextEdits: [TextEdit.replace(nextLineRange, `${lineIndent}}\n${nextLine}`)],
-				}, i));
+				result.push(
+					withSortKey({
+						label: s,
+						kind: CompletionItemKind.Keyword,
+						insertText: s,
+					}, i, 0),
+					withSortKey({
+						label: s + " block",
+						kind: CompletionItemKind.Unit,
+						insertText: s + '\n\t',
+						additionalTextEdits: [TextEdit.replace(nextLineRange, `${lineIndent}}\n${nextLine}`)],
+					}, i, 1),
+				);
 			} else if (!s.startsWith('ID_')) {
 				const prefix = requiresNewLine(s, document.lineAt(pos.line).isEmptyOrWhitespace) ? '\n' : '';
 				result.push(withSortKey({
