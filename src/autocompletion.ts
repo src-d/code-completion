@@ -183,7 +183,7 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	tokenize(position: number, text: string, full: boolean = false): Thenable<string> {
 		const tokenizer = path.join(this.extPath, 'bin', platformBin(process.platform, 'tokenizer'));
 		return new Promise<string>((resolve, reject) => {
-			exec(tokenizer, [`-pos=${position+1}`].concat(full ? ['-full=true'] : []), text + ' ')
+			exec(tokenizer, [`-pos=${position}`].concat(full ? ['-full=true'] : []), text + ' ')
 				.then(out => {
 					if (out.stdout.startsWith('!ERR')) {
 						reject(out.stdout.substr(out.stdout.indexOf(':')));
@@ -305,8 +305,16 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 					new Position(pos.line, 0),
 					new Position(pos.line, document.lineAt(pos.line).firstNonWhitespaceCharacterIndex)
 				));
-				const nextLineRange = document.lineAt(pos.line + 1).range;
-				const nextLine = document.getText(nextLineRange);
+
+				let additionalEdit;
+				try {
+					const nextLineRange = document.lineAt(pos.line + 1).range;
+					const nextLine = document.getText(nextLineRange);
+					additionalEdit = TextEdit.replace(nextLineRange, `${lineIndent}}\n${nextLine}`);
+				} catch (ignored) {
+					additionalEdit = TextEdit.insert(new Position(pos.line + 1, 1), `\n${lineIndent}}`);
+				}
+
 				result.push(
 					withSortKey({
 						label: s,
@@ -317,7 +325,7 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 						label: s + " block",
 						kind: CompletionItemKind.Unit,
 						insertText: s + '\n\t',
-						additionalTextEdits: [TextEdit.replace(nextLineRange, `${lineIndent}}\n${nextLine}`)],
+						additionalTextEdits: [additionalEdit],
 					}, i, 1),
 				);
 			} else if (!s.startsWith('ID_')) {

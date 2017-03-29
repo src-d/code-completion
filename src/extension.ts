@@ -1,4 +1,5 @@
 'use strict';
+import { runInDebugContext } from 'vm';
 
 import { 
     DocumentFilter, languages, ExtensionContext,
@@ -12,6 +13,7 @@ const TRIGGER_CHARS: string[] = ['.', ' ', '\n', '(', ')', '\t', ',', '[', ']'];
 const python = binPath('python3') || binPath('python');
 const tokenModel = 'maximo_toks_0.81.hdf';
 const idModel = 'maximo_ids_public.hdf';
+const DEBUG = false;
 
 let relevanceProc: ChildProcess;
 let tokenProc: ChildProcess;
@@ -39,9 +41,9 @@ export function activate(context: ExtensionContext) {
         GO_CODE,
         new GoCompletionProvider(
             context.extensionPath,
-            new LineExchangeProcess(relevanceProc),
-            new LineExchangeProcess(tokenProc),
-            new LineExchangeProcess(idProc),
+            new LineExchangeProcess("relevance", relevanceProc, DEBUG),
+            new LineExchangeProcess("token", tokenProc, DEBUG),
+            new LineExchangeProcess("identifier", idProc, DEBUG),
         ),
         ...TRIGGER_CHARS,
     ));

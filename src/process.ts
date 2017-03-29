@@ -94,24 +94,32 @@ export class LineExchangeProcess {
     private rl: ReadLine;
     private proc: ChildProcess;
     private closed: boolean;
+    private debug: boolean;
+    private name: string;
     private promises = [];
     private resolvers = [];
 
-    constructor(proc: ChildProcess) {
+    constructor(name: string, proc: ChildProcess, debug: boolean) {
         this.rl = createInterface({ input: proc.stdout });
         this.proc = proc;
+        this.debug = debug;
+        this.name = name;
 
         this.rl.on('line', line => {
+            if (this.debug) {
+                console.log(`process ${this.name} received line:`, line);
+            }
+
             let res = this.resolvers.pop();
             if (res) {
                 res(line);
             } else {
-                console.error('no resolver for line', line);
+                console.error(`${this.name}: no resolver for line`, line);
             }
         });
 
         const close = () => {
-            console.error('closed proc');
+            console.error('closed proc', this.name);
             this.closed = true;
             this.promises = null;
             this.resolvers = null;
@@ -127,6 +135,9 @@ export class LineExchangeProcess {
      * @param line line to write
      */
     write(line: string): Thenable<string | undefined> {
+        if (this.debug) {
+            console.log(`process ${this.name} wrote line:`, line);
+        }
         return new Promise((resolve, reject) => {
             this.proc.stdin.write(line.trim() + '\n', () => {
                 let res;
@@ -145,7 +156,7 @@ export class LineExchangeProcess {
      */
     next(): Thenable<string | undefined> {
         if (this.closed || this.promises.length === 0) {
-            console.warn('unable to retrieve next');
+            console.warn(`${this.name} unable to retrieve next line`);
             return Promise.resolve(undefined);
         }
 
