@@ -207,7 +207,7 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 	suggestNextTokens(tokens: string, line: string): Thenable<string[]> {
 		tokens = tokens.trim();
 		if (!line.trim()) {
-			tokens.substring(0, tokens.length - 1) + ', ";"]';
+			tokens = tokens.substring(0, tokens.length - 1) + ', ";"]';
 		}
 
 		return this.suggester.write(tokens.trim())
