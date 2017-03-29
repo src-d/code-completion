@@ -240,13 +240,13 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 						const [ident, confidence] = p.split('@');
 						items.filter(it => it.label.toLowerCase().indexOf(ident) >= 0)
 							.forEach(m => {
-								confidences[m.label] += confidence;
+								confidences[m.label] = Number(confidence) + (confidences[m.label] || 0);
 							});
 					});
 
 				return items
 					.filter(it => (confidences[it.label] || 0) > 0.4)
-					.sort((a, b) => (confidences[a.label] || 0) - (confidences[b.label] || 0));
+					.sort((a, b) => confidences[a.label] - confidences[b.label]);
 			});
 	}
 
@@ -486,7 +486,9 @@ function autocomplete(position: number, text: string): Thenable<CompletionItem[]
 	const gocode = binPath('gocode');
 	return exec(gocode, ['-f=json', 'autocomplete', 'c' + position], text)
 		.then(output => {
-			const suggestions = <[number, GocodeSuggestion[]]>JSON.parse(output.stdout);
+			const suggestions = <[number, GocodeSuggestion[]]>JSON.parse(output.stdout) || [];
+			if (suggestions.length < 2) return [];
+
 			return suggestions[1].map(s => {
 				return {
 					label: s.name,

@@ -35,6 +35,7 @@ export function activate(context: ExtensionContext) {
         '--model', 
         `${extPath}/rnn/${idModel}`,
         '--only-public',
+        '--number', '20',
     ]);
  
     context.subscriptions.push(languages.registerCompletionItemProvider(
