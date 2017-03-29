@@ -245,7 +245,7 @@ export default class GoCompletionProvider implements CompletionItemProvider {
 					});
 
 				return items
-					.filter(it => (confidences[it.label] || 0) > 0.4)
+					.filter(it => (confidences[it.label] || 0) > 0)
 					.sort((a, b) => confidences[a.label] - confidences[b.label]);
 			});
 	}
