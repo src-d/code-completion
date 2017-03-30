@@ -30,6 +30,8 @@ def parse_args():
     parser.add_argument("--cache", action="store_true")
     parser.add_argument("--unified", action="store_true",
                         help="The input format is the same as in train_ids.py")
+    parser.add_argument("--word2vec", help="Use word2vec embeddings from the "
+                                           "specified pickle file.")
     return parser.parse_args()
 
 
@@ -39,6 +41,14 @@ def main():
     maxlines = args.maxlines
     start_offset = args.start_offset
 
+    if args.word2vec:
+        with open(args.word2vec, "rb") as fin:
+            w2v = pickle.load(fin)
+        words = w2v[0]
+        embeddings = w2v[-1]
+        word_map = {w: i for i, w in enumerate(words)}
+        del words
+
     if os.path.exists(args.input + ".pickle"):
         print("loading the cached dataset...")
         with open(args.input + ".pickle", "rb") as fin:
@@ -46,6 +56,9 @@ def main():
     else:
         x = []
         y = []
+        dims = len(token_map)
+        if args.word2vec:
+            dims += len(embeddings[0])
         with open(args.input) as fin:
             for lineno, line in enumerate(fin):
                 if lineno % 1000 == 0:
@@ -56,13 +69,26 @@ def main():
                 if args.unified:
                     ctx = [ctx[i] for i in range(len(ctx))
                            if i == 0 or ctx[i - 1] != ID_S]
+                word = False
                 for i in range(start_offset, len(ctx)):
-                    sample = numpy.zeros((maxlen, len(token_map)),
-                                         dtype=numpy.float32)
+                    if word:
+                        word = False
+                        continue
+                    if ctx[i] == ID_S and args.word2vec:
+                        word = True
+                    sample = numpy.zeros((maxlen, dims), dtype=numpy.float32)
+                    word2 = False
                     for j in range(maxlen):
                         k = i - maxlen + j
                         if k >= 0:
-                            sample[j] = token_map[ctx[k]]
+                            if word2:
+                                word2 = False
+                                sample[j][len(token_map):] = \
+                                    embeddings[word_map[ctx[k]]]
+                                continue
+                            if ctx[k] == ID_S and args.word2vec:
+                                word2 = True
+                            sample[j][:len(token_map)] = token_map[ctx[k]]
                     x.append(sample)
                     y.append(token_map[ctx[i]])
         x = numpy.array(x, dtype=numpy.float32)
