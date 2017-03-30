@@ -77,7 +77,9 @@ function killProcs(...procs: ChildProcess[]) {
  * @param args arguments of the script
  */
 function spawnPythonProc(name: string, extPath: string, script: string, args: string[] = []): ChildProcess {
-    const proc = spawn(python, [`${extPath}/${script}`].concat(args));
+    let env = Object.create(process.env);
+    env.DYLD_LIBRARY_PATH = '/usr/local/cuda/lib:/Developer/NVIDIA/CUDA-8.0/lib';
+    const proc = spawn(python, [`${extPath}/${script}`].concat(args), {env: env});
     proc.stderr.on('data', (data) => {
         console.error(data.toString());
     });
