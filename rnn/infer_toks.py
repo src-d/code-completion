@@ -17,6 +17,8 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
     parser.add_argument("--number", type=int, default=1)
+    parser.add_argument("--unified", action="store_true",
+                        help="The input format is the same as in train_ids.py")
     return parser.parse_args()
 
 
@@ -29,11 +31,13 @@ def main():
         try:
             ctx = eval(line)
             x[:] = 0
+            if args.unified:
+                ctx = [ctx[i] for i in range(len(ctx))
+                       if i == 0 or ctx[i - 1] != ID_S]
             for i in range(maxlen):
                 k = len(ctx) - maxlen + i
                 if k >= 0:
                     x[0, i] = token_map[ctx[k]]
-
             preds = prediction2token(model.predict(x, verbose=0)[0], args.number)
             sys.stdout.write("%s\n" % " ".join("%r@%.3f" % p for p in preds))
             sys.stdout.flush()

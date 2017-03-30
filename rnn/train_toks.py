@@ -28,6 +28,8 @@ def parse_args():
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--cache", action="store_true")
+    parser.add_argument("--unified", action="store_true",
+                        help="The input format is the same as in train_ids.py")
     return parser.parse_args()
 
 
@@ -51,6 +53,9 @@ def main():
                 if lineno > maxlines > 0:
                     break
                 ctx = eval(line)
+                if args.unified:
+                    ctx = [ctx[i] for i in range(len(ctx))
+                           if i == 0 or ctx[i - 1] != ID_S]
                 for i in range(start_offset, len(ctx)):
                     sample = numpy.zeros((maxlen, len(token_map)),
                                          dtype=numpy.float32)
