@@ -12,7 +12,7 @@
 ```
 git clone git@github.com/src-d/code-completion.git
 cd code-completion
-sh install.sh # or sh install_sudo.sh
+./install.sh
 ```
 
 ## Install extension
