@@ -62,7 +62,7 @@ def main():
         dims = len(token_map)
         if args.word2vec:
             dims += len(embeddings[0])
-        with open(args.input) as fin:
+        with open(args.input, errors="ignore") as fin:
             for lineno, line in enumerate(fin):
                 if lineno % 1000 == 0:
                     print("line #%d" % lineno)
