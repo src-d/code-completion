@@ -6,6 +6,7 @@ import sys
 from keras import models, layers, regularizers, optimizers
 
 from tokens import *
+from common import extract_names
 
 
 def parse_args():
@@ -25,7 +26,7 @@ def parse_args():
     parser.add_argument("--recurrent-dropout", type=float, default=0)
     parser.add_argument("--activation", default="tanh")
     parser.add_argument("--optimizer", default="rmsprop")
-    parser.add_argument("--batch_size", type=int, default=128)
+    parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--cache", action="store_true")
     parser.add_argument("--unified", action="store_true",
@@ -40,8 +41,10 @@ def main():
     maxlen = args.maxlen
     maxlines = args.maxlines
     start_offset = args.start_offset
+    args.unified |= bool(args.word2vec)
 
     if args.word2vec:
+        print("reading word2vec...")
         with open(args.word2vec, "rb") as fin:
             w2v = pickle.load(fin)
         words = w2v[0]
@@ -67,28 +70,45 @@ def main():
                     break
                 ctx = eval(line)
                 if args.unified:
-                    ctx = [ctx[i] for i in range(len(ctx))
-                           if i == 0 or ctx[i - 1] != ID_S]
-                word = False
-                for i in range(start_offset, len(ctx)):
-                    if word:
-                        word = False
-                        continue
-                    if ctx[i] == ID_S and args.word2vec:
-                        word = True
-                    sample = numpy.zeros((maxlen, dims), dtype=numpy.float32)
-                    word2 = False
-                    for j in range(maxlen):
-                        k = i - maxlen + j
-                        if k >= 0:
-                            if word2:
-                                word2 = False
-                                sample[j][len(token_map):] = \
-                                    embeddings[word_map[ctx[k]]]
+                    if not args.word2vec:
+                        ctx = [c for i, c in enumerate(ctx)
+                               if i == 0 or ctx[i - 1] != ID_S]
+                    else:
+                        new_ctx = []
+                        for i, c in enumerate(ctx):
+                            if i == 0 or (ctx[i - 1] != ID_S and ctx[i] != ID_S):
+                                new_ctx.append(c)
                                 continue
-                            if ctx[k] == ID_S and args.word2vec:
-                                word2 = True
-                            sample[j][:len(token_map)] = token_map[ctx[k]]
+                            if ctx[i] == ID_S:
+                                continue
+                            id_s_inserted = False
+                            for part in extract_names(c):
+                                pi = word_map.get(part)
+                                if pi is not None:
+                                    if not id_s_inserted:
+                                        new_ctx.append(ID_S)
+                                        id_s_inserted = True
+                                    else:
+                                        new_ctx.append(ID_SS)
+                                    new_ctx.append(pi)
+                        ctx = new_ctx
+                for i in range(start_offset, len(ctx)):
+                    if ctx[i - 1] in (ID_S, ID_SS) or ctx[i] == ID_SS:
+                        continue
+                    sample = numpy.zeros((maxlen, dims), dtype=numpy.float32)
+                    j = maxlen
+                    k = i
+                    while j >= 0 and k >= 0:
+                        k -= 1
+                        if ctx[k] in (ID_S, ID_SS) and args.unified:
+                            continue
+                        j -= 1
+                        if ctx[k - 1] in (ID_S, ID_SS) and args.unified:
+                            sample[j][:len(token_map)] = token_map[ctx[k - 1]]
+                            if args.word2vec:
+                                sample[j][len(token_map):] = embeddings[ctx[k]]
+                            continue
+                        sample[j][:len(token_map)] = token_map[ctx[k]]
                     x.append(sample)
                     y.append(token_map[ctx[i]])
         x = numpy.array(x, dtype=numpy.float32)
@@ -130,9 +150,10 @@ def train(x, y, **kwargs):
         kernel_regularizer=regularizers.l2(regularization),
         input_shape=x[0].shape, activation=activation))
     if dense_neurons > 0:
-        model.add(layers.Dense(dense_neurons, activation="prelu"))
+        model.add(layers.Dense(dense_neurons))
         model.add(layers.normalization.BatchNormalization())
-    model.add(layers.Dense(x[0].shape[-1], activation="softmax"))
+        model.add(layers.advanced_activations.PReLU())
+    model.add(layers.Dense(y[0].shape[-1], activation="softmax"))
     optimizer = getattr(optimizers, optimizer)(lr=learning_rate, clipnorm=1.)
     model.compile(loss="categorical_crossentropy", optimizer=optimizer,
                   metrics=["accuracy", "top_k_categorical_accuracy"])

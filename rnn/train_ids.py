@@ -1,16 +1,13 @@
 import argparse
 import os
 import pickle
-import re
 import sys
 
 from keras import models, layers, regularizers, optimizers
 from nltk.stem.snowball import SnowballStemmer
 
+from common import extract_names
 from tokens import *
-
-
-NAME_BREAKUP_RE = re.compile(r"[^a-zA-Z]+")
 
 
 def parse_args():
@@ -30,49 +27,12 @@ def parse_args():
     parser.add_argument("--recurrent-dropout", type=float, default=0)
     parser.add_argument("--activation", default="sigmoid")
     parser.add_argument("--optimizer", default="rmsprop")
-    parser.add_argument("--batch_size", type=int, default=128)
+    parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--cache", action="store_true")
     parser.add_argument("--shuffle", action="store_true")
     parser.add_argument("--only-public", action="store_true")
     return parser.parse_args()
-
-
-def extract_names(token):
-    token = token.strip()
-    prev_p = [""]
-
-    def ret(name):
-        r = name.lower()
-        if len(name) >= 3:
-            yield r
-            if prev_p[0]:
-                yield prev_p[0] + r
-                prev_p[0] = ""
-        else:
-            prev_p[0] = r
-
-    for part in NAME_BREAKUP_RE.split(token):
-        if not part:
-            continue
-        prev = part[0]
-        pos = 0
-        for i in range(1, len(part)):
-            this = part[i]
-            if prev.islower() and this.isupper():
-                yield from ret(part[pos:i])
-                pos = i
-            elif prev.isupper() and this.islower():
-                if 0 < i - 1 - pos <= 3:
-                    yield from ret(part[pos:i - 1])
-                    pos = i - 1
-                elif i - 1 > pos:
-                    yield from ret(part[pos:i])
-                    pos = i
-            prev = this
-        last = part[pos:]
-        if last:
-            yield from ret(last)
 
 
 def commaed_int(x):

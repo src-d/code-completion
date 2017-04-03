@@ -16,9 +16,11 @@ from tokens import *
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
-    parser.add_argument("--number", type=int, default=1)
+    parser.add_argument("--number", type=int, default=5)
     parser.add_argument("--unified", action="store_true",
                         help="The input format is the same as in train_ids.py")
+    parser.add_argument("--word2vec", help="Use word2vec embeddings from the "
+                                           "specified pickle file.")
     return parser.parse_args()
 
 

@@ -19,6 +19,7 @@ ID_LIT_IMAG = VariadicToken("ID_LIT_IMAG")
 ID_LIT_INT = VariadicToken("ID_LIT_INT")
 ID_LIT_STR = VariadicToken("ID_LIT_STR")
 ID_S = VariadicToken("ID_S")
+ID_SS = VariadicToken("ID_SS")
 
 
 _tokens = [
@@ -30,7 +31,7 @@ _tokens = [
     "import", "interface", "map", "nil", "package", "range", "return",
     "select", "struct", "switch", "type", "var", "{", "|", "|=", "||", "}",
     ID_LIT_BOOL, ID_LIT_CHAR, ID_LIT_FLOAT, ID_LIT_IMAG, ID_LIT_INT,
-    ID_LIT_STR, ID_S
+    ID_LIT_STR, ID_S, ID_SS
 ]
 
 
