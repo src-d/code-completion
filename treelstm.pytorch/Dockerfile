@@ -17,7 +17,7 @@ ADD . /app
 # * fix permissions
 # * fetch & preprcocess dataset
 RUN locale-gen --purge en_US.UTF-8; \
- pip3 install http://download.pytorch.org/whl/cu80/torch-0.1.12.post2-cp35-cp35m-linux_x86_64.whl; \
+ pip3 install http://download.pytorch.org/whl/cu80/torch-0.2.0.post1-cp35-cp35m-manylinux1_x86_64.whl ; \
  pip3 install torchvision; \
  apt-get update; apt-get install openjdk-8-jre -y; \
  pip3 install tqdm; \
@@ -25,5 +25,5 @@ RUN locale-gen --purge en_US.UTF-8; \
  cd treelstm.pytorch/; chmod -R 777 *.sh; ./fetch.sh; ./preprocess.sh
 
 # Run ipython when the container launches
-ENTRYPOINT ["ipython3"]
+CMD ["ipython3"]
 
